@@ -11,9 +11,11 @@ Original script created on Wed Jan 20 09:34:36 2016
 
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.random import default_rng
 import os
 import subprocess
 import sys
+import time
 import yaml
 
 
@@ -87,6 +89,15 @@ def write_input(settings):
     
     job_name_template = settings['job']['name']
     
+    # Radii and filenames
+    meas_R1 = 17.5e-3
+    meas_R2 = 0.023881216468179
+    meas_R3 = 0.032983187004897
+    meas_R4 = 0.036619880188226
+    rad_at_SRM = 45.0e-3
+    topwallhalflen = 7.5e-3
+    use_topwall = False
+    
     # Material properties
     material_name = settings['material']['name']
     density = settings['material']['density']
@@ -95,7 +106,7 @@ def write_input(settings):
     [v_L, v_S] = velocity(modulus, poisson, density)
     
     # Probe properties
-    freq = 2*settings['probe']['freq']
+    freq = settings['probe']['freq']
     lam_L = wavelength(v_L, freq)
     probe_width = settings['probe']['width']
     probe_pitch = probe_width + settings['probe']['separation']
@@ -113,7 +124,6 @@ def write_input(settings):
         settings['mesh']['geom']['y']
     ])
     
-    rad_at_SRM = 25.0e-3
     geomR = rad_at_SRM + 1.5*lam_L
     N_wall = int(np.round(2*np.pi*geomR / dx))
     jj = np.linspace(1, int(N_wall/2), int(N_wall/2))
@@ -164,10 +174,24 @@ def write_input(settings):
     max_area = (dx*dx)/2.
     print('max area = {}\n'.format(max_area))
     
+    N_topwall = np.round(2*topwallhalflen/dx).astype(int)
+    top_wall = np.zeros((2, N_topwall))
+    top_wall[0, :] = np.linspace(-topwallhalflen, topwallhalflen, N_topwall)
+    
     # Read the shape of the part to be inspected. List coordinates as they are
     # reached as the perimeter is traced out, starting in the +ve x-direction
     # from the probe.
-    ext_corners = np.append(probe_coords, ext_corners, 1)
+    if use_topwall:
+        ext_corners = np.append(top_wall[:, 1:-1], ext_corners, 1)
+        N_topwall -= 2
+        
+        N_surf = N_topwall
+        
+        assert(N_surf == amplitude.shape[1]-1)
+    else:
+        ext_corners = np.append(probe_coords, ext_corners, 1)
+        
+        N_surf = N_probe_coords
     
     
     
@@ -232,7 +256,7 @@ def write_input(settings):
         
     SRM_nodes = np.array([np.linspace(rad_at_SRM, geomR, SRM_n_layers),
                           np.zeros((SRM_n_layers))])
-    ext_corners = np.insert(ext_corners, [N_probe_coords], SRM_nodes[:, :-1], axis=1)
+    ext_corners = np.insert(ext_corners, [N_surf], SRM_nodes[:, :-1], axis=1)
     ext_corners = np.append(ext_corners, -np.flip(SRM_nodes[:, :-1], axis=1), axis=1)
     outer_vertices = ext_corners.shape[1]
     
@@ -304,16 +328,69 @@ def write_input(settings):
     # else:
     N_hole = 0
     
-    meas_R = 20.0e-3
-    N_meas = int(np.round(2*np.pi*meas_R / dx))
-    jj = np.linspace(1, int(N_meas/2), int(N_meas/2))
+    # N_measList = []
+    # meas_RList = np.arange(10e-3, rad_at_SRM, 0.1e-3)
+    # meas_internal_nodes = None
     
-    innerDmeas = np.exp(-2*np.pi*1j * jj/N_meas) * meas_R
-    innerDmeas = innerDmeas[1:-2]
-    meas_internal_nodes = np.array([
-        np.real(innerDmeas),
-        np.imag(innerDmeas)
-    ])
+    # for measR in meas_RList:
+    #     N_meas = 202#int(np.round(2*np.pi*measR / dx))
+    #     N_measList.append(N_meas)
+    #     jj = np.linspace(1, int(N_meas/2), int(N_meas/2))
+        
+    #     innerDmeas = np.exp(-2*np.pi*1j * jj/N_meas) * measR
+    #     innerDmeas = innerDmeas[1:-2]
+    #     if meas_internal_nodes is None:
+    #         meas_internal_nodes = np.array([
+    #             np.real(innerDmeas),
+    #             np.imag(innerDmeas)
+    #         ])
+    #     else:
+    #         meas_internal_nodes = np.append(meas_internal_nodes, np.array([
+    #             np.real(innerDmeas),
+    #             np.imag(innerDmeas)
+    #         ]), axis=1)
+    
+    # N_meas1 = int(np.round(2*np.pi*meas_R1 / dx))
+    # jj = np.linspace(1, int(N_meas1/2), int(N_meas1/2))
+    
+    # innerDmeas = np.exp(-2*np.pi*1j * jj/N_meas1) * meas_R1
+    # innerDmeas = innerDmeas[1:-2]
+    # meas_internal_nodes = np.array([
+    #     np.real(innerDmeas),
+    #     np.imag(innerDmeas)
+    # ])
+    
+    # N_meas2 = int(np.round(2*np.pi*meas_R2 / dx))
+    # jj = np.linspace(1, int(N_meas2/2), int(N_meas2/2))
+    
+    # innerDmeas = np.exp(-2*np.pi*1j * jj/N_meas2) * meas_R2
+    # innerDmeas = innerDmeas[1:-2]
+    # meas_internal_nodes = np.append(meas_internal_nodes, np.array([
+    #     np.real(innerDmeas),
+    #     np.imag(innerDmeas)
+    # ]), axis=1)
+    
+    # N_meas3 = int(np.round(2*np.pi*meas_R3 / dx))
+    # jj = np.linspace(1, int(N_meas3/2), int(N_meas3/2))
+    
+    # innerDmeas = np.exp(-2*np.pi*1j * jj/N_meas3) * meas_R3
+    # innerDmeas = innerDmeas[1:-2]
+    # meas_internal_nodes = np.append(meas_internal_nodes, np.array([
+    #     np.real(innerDmeas),
+    #     np.imag(innerDmeas)
+    # ]), axis=1)
+    
+    # N_meas4 = int(np.round(2*np.pi*meas_R4 / dx))
+    # jj = np.linspace(1, int(N_meas4/2), int(N_meas4/2))
+    
+    # innerDmeas = np.exp(-2*np.pi*1j * jj/N_meas4) * meas_R4
+    # innerDmeas = innerDmeas[1:-2]
+    # meas_internal_nodes = np.append(meas_internal_nodes, np.array([
+    #     np.real(innerDmeas),
+    #     np.imag(innerDmeas)
+    # ]), axis=1)
+    
+    N_meas = 0#sum(N_measList)
     
     
     
@@ -327,13 +404,14 @@ def write_input(settings):
     # Make two of them, one with the hole present and one without.
     job_name_template = '{}'.format(settings['job']['name'])
     filename = '{}.poly'.format(job_name_template)
-    all_the_nodes = np.zeros((2, 200000)) #Arbitrary large array; used for plotting only.
-    node_segments = np.zeros((2, 200000)) #Arbitrary large array; used for plotting only.
     
     numNodes = ext_corners.shape[1]
     for layer in SRM_internal_nodes:
         numNodes += layer.shape[1]
-    numNodes += meas_internal_nodes.shape[1]
+    # numNodes += meas_internal_nodes.shape[1]
+    
+    all_the_nodes = np.zeros((2, int(1.25*numNodes))) #Arbitrary large array; used for plotting only.
+    node_segments = np.zeros((2, int(1.25*numNodes))) #Arbitrary large array; used for plotting only.
     
     # Write out the node numbers and locations
     with open(filename, 'w') as f:
@@ -351,10 +429,10 @@ def write_input(settings):
                 all_the_nodes[:, count-1] = [layer[0, jj], layer[1, jj]]
                 count += 1
         # Write measuring layer
-        for kk in range(meas_internal_nodes.shape[1]):
-            f.write('{}   {} {}\n'.format(count, meas_internal_nodes[0, kk], meas_internal_nodes[1, kk]))
-            all_the_nodes[:, count-1] = [meas_internal_nodes[0, kk], meas_internal_nodes[1, kk]]
-            count += 1
+        # for kk in range(meas_internal_nodes.shape[1]):
+        #     f.write('{}   {} {}\n'.format(count, meas_internal_nodes[0, kk], meas_internal_nodes[1, kk]))
+        #     all_the_nodes[:, count-1] = [meas_internal_nodes[0, kk], meas_internal_nodes[1, kk]]
+        #     count += 1
         
         
         
@@ -375,8 +453,8 @@ def write_input(settings):
         #SRM vertices (pre-defined element edges. Not walls)
         for ii in range(SRM_n_layers-1):
             layer = SRM_internal_nodes[ii]
-            f.write('{}    {} {} {}\n'.format(count, num_nodes_on_tx+ii+1, count-ii, 3))
-            node_segments[:, count-1] = [num_nodes_on_tx+ii+1, count-ii]
+            f.write('{}    {} {} {}\n'.format(count, N_surf+ii+1, count-ii, 3))
+            node_segments[:, count-1] = [N_surf+ii+1, count-ii]
             count += 1
             for jj in range(layer.shape[1]-1):
                 f.write('{}    {} {} {}\n'.format(count, count-1-ii, count-ii, 3))
@@ -407,7 +485,10 @@ def write_input(settings):
     # If we are running locally on a windows machine
     if sys.platform == 'win32':
         print("triangle -p -a{:.15f} -j -q30 -C {}".format(max_area, filename))
+        t1 = time.time_ns()
         subprocess.run("triangle -p -a{:.15f} -j -q30 -C {}".format(max_area, filename))
+        t2 = time.time_ns()
+        print("Triangle completed in {:4.3g}s".format((t2-t1)*10**-9))
     # If we are running on BP (or any other linux machine). Commands to run are
     # incompatible between systems. Note also that if running on BP, the triangle
     # application needs to be compiled in the directory it will be run.
@@ -434,18 +515,25 @@ def write_input(settings):
     # Store nodes in an easy to read format for determining if the node is in
     # the SRM. Disable if SRM is not in use, as this is very computationally
     # expensive and should be avoided if possible.
+    measSet = np.unique(default_rng(seed=int(time.time())).integers(1, n_nodes+1, (10000)))
     node_block = np.zeros((2, n_nodes))
     for node in range(n_nodes):
         line = nodes[node+1].split('  ')
         line = [item for item in line if item != '']
-        node_block[:, node] = [float(line[1]), float(line[2])]
+        r = [float(line[1]), float(line[2])]
+        node_block[:, node] = r
+        if ((np.linalg.norm(r) - rad_at_SRM) > -2e-13 or (np.linalg.norm(r) - 2.0e-3) < 2e-13) and (node+1) in measSet:
+            measSet = measSet[measSet != node+1]
+    measSet = np.unique(np.append(measSet, [1]))
+    
+    print("Number of histories requested: {}".format(measSet.shape[0]))
         
     # Store elements in an easy to read format for SRM determination.
     element_block = np.zeros((3, n_elements))
-    # Define array to store subset of elements which make up the SRM. Note that
-    # an arbitrary large number has been used to initialise the array: after
-    # all SRM elements have been obtained, the extras will need to be removed.
-    SRM_elements = np.zeros((SRM_n_layers-1, 100000), dtype=int)
+    # Define array to store subset of elements which make up the SRM. SRM makes
+    # up ~8% of all nodes, initialise array with 10% of all nodes. After all SRM
+    # elements have been obtained, the extras will need to be removed.
+    SRM_elements = np.zeros((SRM_n_layers-1, int(.1*n_elements)), dtype=int)
     # Subset of elements containing everything but the SRM elements. Again
     # initialised to be arbitrarily big.
     All_but_SRM_els = np.zeros(n_elements, dtype=int)
@@ -587,7 +675,7 @@ def write_input(settings):
             
             i.write('*Elset, elset=All_elements, generate\n')
             i.write('1, {}, 1\n'.format(n_elements))
-            
+                
             # Create node sets corresponding to each element in the array
             for element in range(num_els):
                 i.write('*Nset, nset=El{}\n'.format(element+1))
@@ -598,8 +686,9 @@ def write_input(settings):
             for layer in SRM_internal_nodes:
                 upToMeas += layer.shape[1]
             i.write('*Nset, nset=MeasureSet\n')
-            for a in range(meas_internal_nodes.shape[1]):
-                i.write('{},\n '.format(upToMeas + a + 1))
+            i.write('1,\n ')
+            for a in measSet:
+                i.write('{},\n '.format(a))
                 
             # Create element set for everything but the SRM, and each SRM
             # sublayer.
@@ -619,7 +708,7 @@ def write_input(settings):
             for sublayer in range(1, SRM_n_layers):
                 i.write('*Solid Section, elset=SRM{}, material={}{}\n'.format(sublayer, material_name, sublayer))
                 i.write(',\n')
-            
+                
             # Write the amplitude definition
             i.write('*System\n')
             i.write('*Amplitude, name=Amp-1\n')
@@ -654,8 +743,9 @@ def write_input(settings):
             i.write('0.0, 0.0\n')
             
             # Apply loads
-            i.write('*Cload, amplitude=Amp-1\n')
-            i.write('El{}, 2, -10\n'.format(el+1)) # Node set, DoF, Magnitude
+            for element in range(num_els):
+                i.write('*Cload, amplitude=Amp-1\n')
+                i.write('El{}, 2, -10\n'.format(element+1)) # Node set, DoF, Magnitude
             
             # Outputs. Work through outputs requested in .yml file.
             if len(settings['output']) > 0:

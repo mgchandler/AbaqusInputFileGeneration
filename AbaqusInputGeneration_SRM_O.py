@@ -14,6 +14,7 @@ import numpy as np
 import os
 import subprocess
 import sys
+import time
 import yaml
 
 
@@ -87,6 +88,14 @@ def write_input(settings):
     
     job_name_template = settings['job']['name']
     
+    # Radii and filenames
+    meas_R1 = 10.0e-3
+    meas_R2 = 20.0e-3
+    meas_R3 = 30.0e-3
+    rad_at_SRM = 32.5e-3
+    topwallhalflen = 19e-3
+    use_topwall = False
+    
     # Material properties
     material_name = settings['material']['name']
     density = settings['material']['density']
@@ -95,7 +104,7 @@ def write_input(settings):
     [v_L, v_S] = velocity(modulus, poisson, density)
     
     # Probe properties
-    freq = 2*settings['probe']['freq']
+    freq = settings['probe']['freq']
     lam_L = wavelength(v_L, freq)
     probe_width = settings['probe']['width']
     probe_pitch = probe_width + settings['probe']['separation']
@@ -113,14 +122,13 @@ def write_input(settings):
         settings['mesh']['geom']['y']
     ])
     
-    rad_at_SRM = 25.0e-3
     geomR = rad_at_SRM + 1.5*lam_L
     N_wall = int(np.round(2*np.pi*geomR / dx))
-    jj = np.linspace(1, int(N_wall/2), int(N_wall/2))
+    jj = np.linspace(1, int(N_wall), int(N_wall))
     
     outerDwall = np.exp(-2*np.pi*1j * jj/N_wall) * geomR
-    outerDwall[0] = geomR
-    outerDwall[-1] = -geomR
+    # outerDwall[0] = geomR
+    # outerDwall[-1] = -geomR
     ext_corners = np.array([
         np.real(outerDwall),
         np.imag(outerDwall)
@@ -164,10 +172,25 @@ def write_input(settings):
     max_area = (dx*dx)/2.
     print('max area = {}\n'.format(max_area))
     
+    N_topwall = np.round(2*topwallhalflen/dx).astype(int)
+    top_wall = np.zeros((2, N_topwall))
+    top_wall[0, :] = np.linspace(-topwallhalflen, topwallhalflen, N_topwall)
+    
     # Read the shape of the part to be inspected. List coordinates as they are
     # reached as the perimeter is traced out, starting in the +ve x-direction
     # from the probe.
-    ext_corners = np.append(probe_coords, ext_corners, 1)
+    # if use_topwall:
+    #     ext_corners = np.append(top_wall[:, 1:-1], ext_corners, 1)
+    #     N_topwall -= 2
+        
+    #     N_surf = N_topwall
+        
+    #     assert(N_surf == amplitude.shape[1]-1)
+    # else:
+    #     ext_corners = np.append(probe_coords, ext_corners, 1)
+        
+    #     N_surf = N_probe_coords
+    N_surf = 0
     
     
     
@@ -232,8 +255,8 @@ def write_input(settings):
         
     SRM_nodes = np.array([np.linspace(rad_at_SRM, geomR, SRM_n_layers),
                           np.zeros((SRM_n_layers))])
-    ext_corners = np.insert(ext_corners, [N_probe_coords], SRM_nodes[:, :-1], axis=1)
-    ext_corners = np.append(ext_corners, -np.flip(SRM_nodes[:, :-1], axis=1), axis=1)
+    # ext_corners = np.insert(ext_corners, [N_surf], SRM_nodes[:, :-1], axis=1)
+    # ext_corners = np.append(ext_corners, -np.flip(SRM_nodes[:, :-1], axis=1), axis=1)
     outer_vertices = ext_corners.shape[1]
     
     SRM_internal_nodes = []
@@ -241,7 +264,7 @@ def write_input(settings):
     for layer in range(SRM_n_layers-1):
         SRM_R = SRM_nodes[0][layer]
         N_SRM = int(np.round(2*np.pi*SRM_R / dx))
-        jj = np.linspace(1, int(N_SRM/2), int(N_SRM/2))
+        jj = np.linspace(1, int(N_SRM), int(N_SRM))
     
         innerDwalls = np.exp(-2*np.pi*1j * jj/N_SRM) * SRM_R
         innerDwalls = innerDwalls[1:-2]
@@ -304,16 +327,37 @@ def write_input(settings):
     # else:
     N_hole = 0
     
-    meas_R = 20.0e-3
-    N_meas = int(np.round(2*np.pi*meas_R / dx))
-    jj = np.linspace(1, int(N_meas/2), int(N_meas/2))
+    N_meas1 = int(np.round(2*np.pi*meas_R1 / dx))
+    jj = np.linspace(1, int(N_meas1), int(N_meas1))
     
-    innerDmeas = np.exp(-2*np.pi*1j * jj/N_meas) * meas_R
+    innerDmeas = np.exp(-2*np.pi*1j * jj/N_meas1) * meas_R1
     innerDmeas = innerDmeas[1:-2]
     meas_internal_nodes = np.array([
         np.real(innerDmeas),
         np.imag(innerDmeas)
     ])
+    
+    N_meas2 = int(np.round(2*np.pi*meas_R2 / dx))
+    jj = np.linspace(1, int(N_meas2), int(N_meas2))
+    
+    innerDmeas = np.exp(-2*np.pi*1j * jj/N_meas2) * meas_R2
+    innerDmeas = innerDmeas[1:-2]
+    meas_internal_nodes = np.append(meas_internal_nodes, np.array([
+        np.real(innerDmeas),
+        np.imag(innerDmeas)
+    ]), axis=1)
+    
+    N_meas3 = int(np.round(2*np.pi*meas_R3 / dx))
+    jj = np.linspace(1, int(N_meas3), int(N_meas3))
+    
+    innerDmeas = np.exp(-2*np.pi*1j * jj/N_meas3) * meas_R3
+    innerDmeas = innerDmeas[1:-2]
+    meas_internal_nodes = np.append(meas_internal_nodes, np.array([
+        np.real(innerDmeas),
+        np.imag(innerDmeas)
+    ]), axis=1)
+    
+    N_meas = N_meas1 + N_meas2 + N_meas3
     
     
     
@@ -327,13 +371,15 @@ def write_input(settings):
     # Make two of them, one with the hole present and one without.
     job_name_template = '{}'.format(settings['job']['name'])
     filename = '{}.poly'.format(job_name_template)
-    all_the_nodes = np.zeros((2, 200000)) #Arbitrary large array; used for plotting only.
-    node_segments = np.zeros((2, 200000)) #Arbitrary large array; used for plotting only.
     
     numNodes = ext_corners.shape[1]
+    numNodes += probe_coords.shape[1]
     for layer in SRM_internal_nodes:
         numNodes += layer.shape[1]
     numNodes += meas_internal_nodes.shape[1]
+    
+    all_the_nodes = np.zeros((2, int(1.25*numNodes))) #Arbitrary large array; used for plotting only.
+    node_segments = np.zeros((2, int(1.25*numNodes))) #Arbitrary large array; used for plotting only.
     
     # Write out the node numbers and locations
     with open(filename, 'w') as f:
@@ -343,6 +389,11 @@ def write_input(settings):
         for ii in range(ext_corners.shape[1]):
             f.write('{}   {} {}\n'.format(count, ext_corners[0, ii], ext_corners[1, ii]))
             all_the_nodes[:, count-1] = [ext_corners[0, ii], ext_corners[1, ii]]
+            count += 1
+        # Write probe coords
+        for pr in range(probe_coords.shape[1]):
+            f.write('{}   {} {}\n'.format(count, probe_coords[0, pr], probe_coords[1, pr]))
+            all_the_nodes[:, count-1] = [probe_coords[0, pr], probe_coords[1, pr]]
             count += 1
         # Write SRM layers
         for layer in SRM_internal_nodes:
@@ -361,7 +412,7 @@ def write_input(settings):
         #Write out the number of segments and number of boundary markers
         numSegments = ext_corners.shape[1]
         for layer in SRM_internal_nodes:
-            numSegments += layer.shape[1]+1
+            numSegments += layer.shape[1]
         
         f.write('{} 1\n'.format(numSegments)) #number of segments, number of boundary markers
         count = 1
@@ -373,18 +424,25 @@ def write_input(settings):
             count += 1
             
         #SRM vertices (pre-defined element edges. Not walls)
+        N_uptolayer = ext_corners.shape[1] + probe_coords.shape[1]
         for ii in range(SRM_n_layers-1):
             layer = SRM_internal_nodes[ii]
-            f.write('{}    {} {} {}\n'.format(count, num_nodes_on_tx+ii+1, count-ii, 3))
-            node_segments[:, count-1] = [num_nodes_on_tx+ii+1, count-ii]
-            count += 1
-            for jj in range(layer.shape[1]-1):
-                f.write('{}    {} {} {}\n'.format(count, count-1-ii, count-ii, 3))
-                node_segments[:, count-1] = [count-1-ii, count-ii]
+            #Outer vertices (i.e. walls of geometry)
+            for ii in range(layer.shape[1]):
+                f.write('{}    {} {} {}\n'.format(count, N_uptolayer+(ii+1), N_uptolayer+(ii+1)%layer.shape[1]+1, 1))
+                node_segments[:, count-1] = [N_uptolayer+(ii+1), N_uptolayer+(ii+1)%layer.shape[1]+1]
                 count += 1
-            f.write('{}    {} {} {}\n'.format(count, count-1-ii, ext_corners.shape[1]-ii, 3))
-            node_segments[:, count-1] = [count-1-ii, ext_corners.shape[1]-ii]
-            count += 1
+            N_uptolayer += layer.shape[1]
+            # f.write('{}    {} {} {}\n'.format(count, N_surf+ii+1, count-ii, 3))
+            # node_segments[:, count-1] = [N_surf+ii+1, count-ii]
+            # count += 1
+            # for jj in range(layer.shape[1]-1):
+            #     f.write('{}    {} {} {}\n'.format(count, count-1-ii, count-ii, 3))
+            #     node_segments[:, count-1] = [count-1-ii, count-ii]
+            #     count += 1
+            # f.write('{}    {} {} {}\n'.format(count, count-1-ii, ext_corners.shape[1]-ii, 3))
+            # node_segments[:, count-1] = [count-1-ii, ext_corners.shape[1]-ii]
+            # count += 1
             
         f.write('0\n')
                     
@@ -407,7 +465,10 @@ def write_input(settings):
     # If we are running locally on a windows machine
     if sys.platform == 'win32':
         print("triangle -p -a{:.15f} -j -q30 -C {}".format(max_area, filename))
+        t1 = time.time_ns()
         subprocess.run("triangle -p -a{:.15f} -j -q30 -C {}".format(max_area, filename))
+        t2 = time.time_ns()
+        print("Triangle completed in {:4.3g}s".format((t2-t1)*10**-9))
     # If we are running on BP (or any other linux machine). Commands to run are
     # incompatible between systems. Note also that if running on BP, the triangle
     # application needs to be compiled in the directory it will be run.
@@ -481,7 +542,7 @@ def write_input(settings):
         
             # Want this to be <= 0 if SRM is in -ve x-direction. Use machine
             # epsilon in case of equality.
-            r = np.sqrt(node_pos[0]**2 + node_pos[1]**2)
+            r = np.sqrt(node_pos[0]*node_pos[0] + node_pos[1]*node_pos[1])
             if r >= rad_at_SRM:
                 SRM_ticker += 1
                 el_pos[0] += node_pos[0] / 3
@@ -499,7 +560,7 @@ def write_input(settings):
             # to on a later iteration.
             which_sublayer = -1
             # Check if it is in the next one.
-            r = np.sqrt(el_pos[0]**2 + el_pos[1]**2)
+            r = np.sqrt(el_pos[0]*el_pos[0] + el_pos[1]*el_pos[1])
             while r >= SRM_nodes[0][which_sublayer+1]:
                 # If it is, update the current sublayer.
                 which_sublayer += 1
@@ -587,12 +648,12 @@ def write_input(settings):
             
             i.write('*Elset, elset=All_elements, generate\n')
             i.write('1, {}, 1\n'.format(n_elements))
-            
+                
             # Create node sets corresponding to each element in the array
             for element in range(num_els):
                 i.write('*Nset, nset=El{}\n'.format(element+1))
                 for a in range(num_nodes_on_tx):
-                    i.write('{},\n '.format(element*num_nodes_on_tx + a + 1))
+                    i.write('{},\n '.format(ext_corners.shape[1] + element*num_nodes_on_tx + a + 1))
                     
             upToMeas = ext_corners.shape[1]
             for layer in SRM_internal_nodes:
@@ -619,7 +680,7 @@ def write_input(settings):
             for sublayer in range(1, SRM_n_layers):
                 i.write('*Solid Section, elset=SRM{}, material={}{}\n'.format(sublayer, material_name, sublayer))
                 i.write(',\n')
-            
+                
             # Write the amplitude definition
             i.write('*System\n')
             i.write('*Amplitude, name=Amp-1\n')
@@ -654,8 +715,9 @@ def write_input(settings):
             i.write('0.0, 0.0\n')
             
             # Apply loads
-            i.write('*Cload, amplitude=Amp-1\n')
-            i.write('El{}, 2, -10\n'.format(el+1)) # Node set, DoF, Magnitude
+            for element in range(num_els):
+                i.write('*Cload, amplitude=Amp-1\n')
+                i.write('El{}, 2, -10\n'.format(element+1)) # Node set, DoF, Magnitude
             
             # Outputs. Work through outputs requested in .yml file.
             if len(settings['output']) > 0:
@@ -715,7 +777,7 @@ if __name__ == '__main__':
         yaml_name = '{}.yml'.format(sys.argv[1])
     # If script is being run from an editor
     else:
-        yaml_name = 'D_1.yml'
+        yaml_name = 'O_1.yml'
         os.chdir('C:\\Users\\mc16535\\OneDrive - University of Bristol\\Documents\\Postgrad\\Coding\\Abaqus\\FMC Generation\\v8 - directivity')
     # Open and read .yml
     settings = read_settings(yaml_name)

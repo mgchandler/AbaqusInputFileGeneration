@@ -46,11 +46,11 @@ def find_nearest_nodes(nodes, targets):
     return nearest_nodes[0, nearest_logical[1:]].astype(int)
     
 def write_input():
-    path = 'C:\\Users\\mc16535\\OneDrive - University of Bristol\\Documents\\Postgrad\\Coding\\Abaqus\\FMC Generation\\v2'
+    path = 'C:\\Users\\mc16535\\OneDrive - University of Bristol\\Documents\\Postgrad\\Coding\\Abaqus\\FMC Generation\\testing timingd'
     os.chdir(path)
     
     #set some global bits and bobs
-    job_name_template = 'FMC_32els_rect_SDH'
+    job_name_template = 'TimetraceComparison_200x40_5e_6'
     
     #Material Properties
     material_name = 'Aluminium'
@@ -64,7 +64,7 @@ def write_input():
     wavelength = v/f
     probe_width = 0.95e-3
     probe_pitch = probe_width + 0.05e-3
-    num_els = 32
+    num_els = 1
     
     amplitude = np.loadtxt('5MHz pulse.csv', delimiter=',')
     
@@ -88,7 +88,7 @@ def write_input():
             probe_centres[0, el]+probe_width/2,
             num_nodes_on_tx
         )
-    probe_coords2 = np.reshape(probe_coords, (2, num_nodes_on_tx*num_els))
+    probe_coords = np.reshape(probe_coords, (2, num_nodes_on_tx*num_els))
     
     #Work out the maximum allowed area for each triangle
     max_area = (dx*dx)/2.
@@ -98,21 +98,21 @@ def write_input():
     #Create the shape geometry. List coordinates adjacently starting with the
     #one on the +ve x-axis.
     ext_corners = np.array([
-        [0.1,  0.1,  -0.1, -0.1],
-        [0.,-20e-3,-20e-3,  0.]
+        [100e-3, 100e-3, -100e-3, -100e-3],
+        [0, -40e-3, -40e-3, 0]
     ])
     
     #Step properties
-    time_step = 2 * dx/v
-    step_time_length = 1.75 * np.max(np.abs(ext_corners[0, :]))/v
+    time_step = 0.1 * dx/v
+    step_time_length = 5e-6#1.75 * np.max(np.abs(ext_corners[0, :]))/v
     
-    ext_corners = np.append(probe_centres, ext_corners, 1)
+    ext_corners = np.append(probe_coords, ext_corners, 1)
     outer_vertices = ext_corners.shape[1]
     
     #Create scattering object
-    xS = [ 27.5e-3]
-    yS = [-15.0e-3]
-    rS = [  1.5e-3]
+    xS = [ 0e-3]
+    yS = [-30.5e-3]
+    rS = [  1.0e-3]
     
     for hole in range(len(xS)):
         N = int(np.round(2*np.pi*rS[hole] / dx))
@@ -200,14 +200,14 @@ def write_input():
             
             #Create the node set which corresponds to the transmitting transducer
             i.write('*Nset, nset=FullProbe\n')
-            for a in range(num_els):
+            for a in range(num_els*num_nodes_on_tx):
                 i.write('{},\n '.format(a+1))
             
             #Create the node set which corresponds to the transmitting transducer
             i.write('*Nset, nset=Transducer\n')
-            transducer_nodes = find_nodes_in_x_width(nodes, probe_centres[:, el], probe_width)
-            for a in transducer_nodes:
-                i.write('{},\n '.format(a))
+            for a in range(num_nodes_on_tx):
+                b = el * num_nodes_on_tx + a
+                i.write('{},\n '.format(b))
             
             #Write the section definition
             i.write('*Solid Section, elset=All_elements, material={}\n'.format(material_name))
@@ -228,7 +228,7 @@ def write_input():
             i.write('{}, {}\n'.format(modulus, poisson))
             
             #Write the step
-            i.write('*Step, name=Step-1, nlgeom=YES\n')
+            i.write('*Step, name=Step-1, nlgeom=NO\n')
             i.write('*Dynamic, Explicit, direct user control\n')
             i.write('{}, {}\n'.format(time_step, step_time_length))
             

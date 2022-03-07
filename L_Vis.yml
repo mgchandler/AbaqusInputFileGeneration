@@ -1,0 +1,58 @@
+job:
+  name: L_Vis
+
+material:
+  name: Aluminium
+  density: 2700.0
+  modulus: 70.0e+9
+  poisson: 0.34
+  
+probe:
+  freq: 5.0e+6
+  width: 0.45e-3
+  separation: 0.05e-3
+  num_els: 32
+  amplitude: 5MHz_pulse.csv
+  time_len: 1.0e-4
+  
+mesh:
+  n_per_wl: 20
+  el_type: CPS3
+  geom:
+    x: 
+     - 40.0e-3
+     - 40.0e-3
+     - 25.0e-3
+     - 25.0e-3
+     - -30.0e-3
+     - -30.0e-3
+    y: 
+     - 0.0
+     - -45.0e-3
+     - -45.0e-3
+     - -25.0e-3
+     - -25.0e-3
+     - 0.0
+  sdh:
+    x: 
+     - 21.5e-3
+    y: 
+     - -17.5e-3
+    r: 
+     - 1.0e-3
+  PML:
+    id:
+     - 4
+     - 7
+     
+output:
+  history:
+    freq: 2
+    output: Node
+    type: U2
+    nset: FullProbe
+  field:
+    t_int: 1e-6
+    output: Element
+    type: S
+    elset: All_elements

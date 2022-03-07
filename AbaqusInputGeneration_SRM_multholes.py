@@ -11,9 +11,11 @@ Original script created on Wed Jan 20 09:34:36 2016
 
 import matplotlib.pyplot as plt
 import numpy as np
+
 import os
 import subprocess
 import sys
+
 import yaml
 
 
@@ -251,30 +253,34 @@ def write_input(settings):
         rS = settings['mesh']['sdh']['r']
         
         # Generate nodes for the boundary of the scatterer.
+        N_holes = []
         for hole in range(len(xS)):
             N_hole = int(np.round(2*np.pi*rS[hole] / dx))
+            N_holes.append(N_hole)
             jj = np.linspace(1, N_hole, N_hole)
             SDH = np.exp(2*np.pi*1j * jj/N_hole) * rS[hole]
             x_full = np.append(ext_corners[0, :], np.real(SDH) + xS[hole])
             y_full = np.append(ext_corners[1, :], np.imag(SDH) + yS[hole])
-        ext_corners = np.array([x_full, y_full])
+            ext_corners = np.array([x_full, y_full])
             
         hole_vertices = SDH.shape[0]
     else:
         N_hole = 0
+        
+    N_holes = np.array(N_holes)
     
     count = 1
     
     # .poly file used as input for Triangle (meshing algorithm). 
     # http://www.cs.cmu.edu/~quake/triangle.poly.html
     
-    # Make two of them, one with the hole present and one without.
-    for doHoles in range(2):
-        if doHoles == 0:
-            job_name_template = '{}'.format(settings['job']['name'])
+    # Make as many of them as we have holes, plus the blank case.
+    for doHole in range(len(xS)+1):
+        if doHole in range(len(xS)):
+            job_name_template = '{}_{}'.format(settings['job']['name'], doHole+1)
             filename = '{}.poly'.format(job_name_template)
         else:
-            job_name_template = '{}_bl'.format(settings['job']['name'])
+            job_name_template = '{}_b'.format(settings['job']['name'])
             filename = '{}.poly'.format(job_name_template)
         node_segments = np.zeros((2, 10000)) #Arbitrary large array; used for plotting only.
         
@@ -288,17 +294,22 @@ def write_input(settings):
             f.write('{} 1\n'.format(ext_corners.shape[1]+N_SRM)) #number of segments, number of boundary markers
             count = 1
             #Outer vertices (i.e. walls of geometry)
-            for ii in range(ext_corners.shape[1] - N_hole):
-                f.write('{}    {} {} {}\n'.format(count, (ii+1), (ii+1)%outer_vertices+1, 1))
-                node_segments[:, count-1] = [(ii+1), (ii+1)%outer_vertices+1]
+            for ii in range(outer_vertices-1):#ext_corners.shape[1] - sum(N_holes)):
+                f.write('{}    {} {} {}\n'.format(count, (ii+1), (ii+2), 1))
+                node_segments[:, count-1] = [(ii+1), (ii+2)]
                 count += 1
+            f.write('{}    {} {} {}\n'.format(count, (ii+2), 1, 1))
+            node_segments[:, count-1] = [(ii+2), 1]
+            count += 1
+            
             if 'sdh' in settings['mesh'].keys():
                 #Hole vertices (i.e. inner wall for scatterer)
-                for ii in range(N_hole):
-                    f.write('{}    {} {} {}\n'.format(count, ii+1 + ext_corners.shape[1] - N_hole, (ii+1)%hole_vertices+1 + ext_corners.shape[1] - N_hole, 2))
-                    
-                    node_segments[:, count-1] = [ii+1 + ext_corners.shape[1] - N_hole, (ii+1)%hole_vertices+1 + ext_corners.shape[1] - N_hole]
-                    count += 1
+                for nn in range(len(xS)):
+                    for ii in range(N_holes[nn]):
+                        f.write('{}    {} {} {}\n'.format(count, ii+1 + ext_corners.shape[1] - sum(N_holes) + sum(N_holes[:nn]), (ii+1)%hole_vertices+1 + ext_corners.shape[1] - sum(N_holes) + sum(N_holes[:nn]), 2))
+                        
+                        node_segments[:, count-1] = [ii+1 + ext_corners.shape[1] - sum(N_holes) + sum(N_holes[:nn]), (ii+1)%hole_vertices+1 + ext_corners.shape[1] - sum(N_holes) + sum(N_holes[:nn])]
+                        count += 1
             #SRM vertices (pre-defined element edges. Not walls)
             if 'SRM' in settings['mesh']['geom']:
                 for boundary in boundaries:
@@ -309,12 +320,10 @@ def write_input(settings):
                         node_segments[:, count-1] = [SRM_start_idx+ii+1, SRM_start_idx+2*SRM_n_layers-ii]
                         count += 1
                         
-            if 'sdh' in settings['mesh'].keys() and doHoles == 0:
+            if 'sdh' in settings['mesh'].keys() and doHole in range(len(xS)):
                 # Hole location (used within Triangle to delete all elements up to walls)
-                f.write('{}\n'.format(len(xS)))
-                if len(xS) >= 1:
-                    for hole in range(len(xS)):
-                        f.write('{}   {} {}\n'.format(hole+1, xS[hole], yS[hole]))
+                f.write('{}\n'.format(1))
+                f.write('{}   {} {}\n'.format(1, xS[doHole], yS[doHole]))
             else:
                 f.write('0\n')
                     
@@ -328,22 +337,24 @@ def write_input(settings):
         #                   [ext_corners[1][int(node_segments[0][ii])-1], ext_corners[1][int(node_segments[1][ii])-1]])
         # plt.xlim(-0.033, -0.029)
         # plt.show()
-            
-                    
-                    
         
         # Call Triangle to generate the mesh.
         # If triangle keeps bringing up errors, check the number of nodes and the
         # number of segments being reported in filename.poly
         # If we are running locally on a windows machine
+        
         if sys.platform == 'win32':
             print("triangle -p -a{:.15f} -j -q30 -C {}".format(max_area, filename))
             subprocess.run("triangle -p -a{:.15f} -j -q30 -C {}".format(max_area, filename))
         # If we are running on BP (or any other linux machine). Commands to run are
         # incompatible between systems. Note also that if running on BP, the triangle
         # application needs to be compiled in the directory it will be run.
-        elif sys.platform == 'linux':
+        else:
+            print("./triangle -p -a{:.15f} -j -q30 -C {}".format(max_area, filename))
             os.system("./triangle -p -a{:.15f} -j -q30 -C {}".format(max_area, filename))
+            # os.system("echo test1")
+            # os.system("./triangle -p -a{:.15f} -j -q30 -C {}".format(max_area, filename))
+            # os.system("echo {}".format(1))
             
             
             
@@ -486,7 +497,7 @@ def write_input(settings):
         else:
             print('Est runtime per transmitter: {:.2f} h'.format(Est_runtime/3600))   
         
-        for el in range(num_els):
+        for el in range(2):#range(num_els): #############################################################################################################
             
             # When corner is rounded, we're probably doing a diffraction study. As
             # such, we only need to activate one transmitter.
@@ -640,7 +651,7 @@ if __name__ == '__main__':
         yaml_name = '{}.yml'.format(sys.argv[1])
     # If script is being run from an editor
     else:
-        yaml_name = 'I_4.yml'
+        yaml_name = 'I_40npw.yml'
         os.chdir('C:\\Users\\mc16535\\OneDrive - University of Bristol\\Documents\\Postgrad\\Coding\\Abaqus\\FMC Generation\\v7')
     # Open and read .yml
     settings = read_settings(yaml_name)

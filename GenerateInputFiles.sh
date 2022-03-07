@@ -2,13 +2,13 @@
 #
 #
 #PBS -l select=1:ncpus=1:mem=1000mb
-#PBS -l walltime=00:04:59
+#PBS -l walltime=00:14:59
 
 # Load modules
 module load lang/python/anaconda/3.8-2020.07
 
 # Make a directory to store .inp files.
-export JOBNAME="L_Obs"
+export JOBNAME="L_Vis"
 
 cd /work/mc16535/Abaqus_Sidewalls/
 mkdir ${JOBNAME}

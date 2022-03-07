@@ -1,5 +1,5 @@
 job:
-  name: L_round_5_0
+  name: L_1
 
 material:
   name: Aluminium
@@ -13,7 +13,7 @@ probe:
   separation: 0.05e-3
   num_els: 32
   amplitude: 5MHz_pulse.csv
-  time_len: 10.0e-6
+
   
 mesh:
   n_per_wl: 20
@@ -33,9 +33,15 @@ mesh:
      - -25.0e-3
      - -25.0e-3
      - 0.0
-  round:
-    idx: 3
-    r: 5.0e-3
+    SRM:
+     - 4
+  sdh:
+    x: 
+     - 0.0e-3
+    y: 
+     - -17.5e-3
+    r: 
+     - 0.2e-3
      
 output:
  - U2:

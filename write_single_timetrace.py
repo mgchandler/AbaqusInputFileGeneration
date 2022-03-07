@@ -1,7 +1,7 @@
 # Writes .dat files containing timetraces for the specified .odb in the current
 # working directory. Note that this script must be called from within Abaqus,
 # i.e. at the command prompt, use command "abaqus python write_single_timetraces.py
-# odb_filename.odb" in the directory containing the files.
+# <odb_filename>.odb" in the directory containing the files.
 
 # A timetrace is defined as U2 History Output data.
 

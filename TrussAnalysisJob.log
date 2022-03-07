@@ -1,0 +1,10 @@
+Analysis initiated from SIMULIA established products
+Abaqus JOB TrussAnalysisJob
+Abaqus 3DEXPERIENCE R2018x
+Abaqus Error: $PBS_NODEFILE improperly defined.
+Begin Convert MFS to SFS
+Tue 18 May 2021 10:52:14 AM BST
+Run SMASimUtility
+Tue 18 May 2021 10:52:14 AM BST
+End Convert MFS to SFS
+Abaqus/Analysis exited with errors

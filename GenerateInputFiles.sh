@@ -31,7 +31,7 @@ hostname
 echo ${JOBNAME} .inp generation from python
 
 # Execute code
-echo python AbaqusInputGeneration_FromSettingsFile.py ${JOBNAME}
-python AbaqusInputGeneration_FromSettingsFile.py ${JOBNAME}
+echo python AbaqusInputGeneration_SRM.py ${JOBNAME}
+python AbaqusInputGeneration_SRM.py ${JOBNAME}
 
 echo End Time: $(date)

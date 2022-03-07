@@ -13,29 +13,25 @@ probe:
   separation: 0.05e-3
   num_els: 32
   amplitude: 5MHz_pulse.csv
-  time_len: 1.0e-4
+  time_len: 75.0e-6
   
 mesh:
   n_per_wl: 20
-  el_type: CPS3
+  el_type: CPE3
   geom:
     x: 
      - 40.0e-3
      - 40.0e-3
      - 25.0e-3
      - 25.0e-3
-     - -30.0e-3
-     - -30.7e-3
-     - -30.7e-3
-     - -30.0e-3
+     - -10.0e-3
+     - -10.0e-3
     y: 
      - 0.0
      - -45.0e-3
      - -45.0e-3
      - -25.0e-3
      - -25.0e-3
-     - -25.0e-3
-     - 0.0
      - 0.0
   sdh:
     x: 
@@ -44,19 +40,20 @@ mesh:
      - -37.5e-3
     r: 
      - 1.0e-3
-  PML:
-    id:
-     - 4
-     - 7
      
 output:
-  history:
-    freq: 2
+ - U2:
+    type: history
     output: Node
-    type: U2
-    nset: FullProbe
-  field:
-    t_int: 1e-6
+    freq: 2
+    sets: 1, 32
+ - S:
+    type: field
     output: Element
-    type: S
-    elset: All_elements
+    t_int: 5e-8
+    set: All_elements
+ - U:
+    type: field
+    output: Node
+    t_int: 5e-8
+    set: All_nodes

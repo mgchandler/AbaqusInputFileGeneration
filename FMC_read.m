@@ -33,7 +33,7 @@ for tx = 1:num_els
 end
 
 % Remove duplicate 0 term at start, and time shift
-time = time(2:end, :) - 2.5e-6;
+time = time(2:end, :) - 5.0e-7;
 data = data(2:end, :);
 
 % fft and ifft to get envelope and abs data.

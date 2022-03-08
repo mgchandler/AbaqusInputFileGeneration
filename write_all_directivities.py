@@ -6,11 +6,11 @@
 # <odb_filename>.odb" in the directory containing the files.
 
 # N.B. This code assumes that the yaml module for Python 2.7.3 is installed at
-# "C:\Python27\Lib\site-packages" if running on Windows, or "/user/home/mc16535/Admin/PythonModules"
-# if running on Linux (BluePebble Cluster). If the user installs the right version
-# of Python and yaml on Windows, this should automatically work; users on the cluster
-# or other Linux distros will have to upload/install yaml and manually update the path
-# themselves.
+# "C:\Python27\Lib\site-packages" if running on Windows, or "/user/home/mc16535/Admin/
+# PythonModules" if running on Linux (BluePebble Cluster). If the user installs the 
+# right version of Python and yaml on Windows, this should automatically work; users on
+# the cluster or other Linux distros will have to upload/install yaml and manually
+# update the path themselves.
 
 # A timetrace is defined as U2 History Output data.
 
@@ -166,23 +166,23 @@ try:
     isCommand = True
     from odbAccess import openOdb
     if "linux" in sys.platform:
-        sys.path.append(r"/user/home/mc16535/Admin/PythonModules")
+        yaml_path = r"/user/home/mc16535/Admin/PythonModules"
+        sys.path.append(yaml_path)
     else:
-        sys.path.append(r"C:\Python27\Lib\site-packages")
+        yaml_path = r"C:\Python27\Lib\site-packages"
+        sys.path.append(yaml_path)
+# Running from console. yaml must be installed; do not worry about path.
 except AssertionError:
     odb_name = 'D_rdm1_45npw.dat'
     filename = odb_name[:-3]+'dir_.dat'
-    os.chdir(r"C:\Users\mc16535\OneDrive - University of Bristol\Documents\Postgrad\Coding\Abaqus\FMC Generation\v9\Output\Phase Difference Study\Directivity - read input")
+    os.chdir(r"C:\Users\mc16535\OneDrive - University of Bristol\Documents\Postgrad\Coding\Abaqus\AbaqusInputFileGeneration - Output\v9\Output\Phase Difference Study\Directivity - read input")
     isCommand = False
     import matplotlib.pyplot as plt
     
 try:
     import yaml
 except ModuleNotFoundError:
-    if "linux" in sys.platform:
-        raise ModuleNotFoundError(r'Module "yaml" expected at location /user/home/mc16535/Admin/PythonModules')
-    else:
-        raise ModuleNotFoundError(r'Module "yaml" expected at location C:\Python27\Lib\site-packages')
+    raise ModuleNotFoundError('Module "yaml" expected at location {}'.format(yaml_path))
 
 t0 = time.time()
 

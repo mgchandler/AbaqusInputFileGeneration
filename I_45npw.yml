@@ -1,6 +1,6 @@
 job:
   # <str> REQUIRED Name used for file generation. Should contain no spaces or special characters.
-  name: D_rdm1_15npw
+  name: I_45npw
 
 
 
@@ -28,15 +28,15 @@ probe:
   cycles: 5
   
   # <double> REQUIRED Element width. Set to 0.0 if a point source is required.
-  width: 0.0e-3
+  width: 0.53e-3
   
   # <double> OPTIONAL Separation between elements. Unused if one element is used. Pitch =
   # Separation + Width.
-  separation: 0.0e-3
+  separation: 0.1e-3
   
   # <int> REQUIRED Number of elements modelled. One input file generated per element, such that a
   # full FMC data set can be captured.
-  num_els: 1
+  num_els: 32
   
   # <str> OPTIONAL Filename for file containing input signal. Used in favour of generating the
   # signal every time. Required if "cycles" is not included.
@@ -49,7 +49,7 @@ probe:
 
 mesh:
   # <int> REQUIRED Number of nodes which will be generated per wavelength. Should be >10.
-  n_per_wl: 15
+  n_per_wl: 45
   
   # <str> REQUIRED Code for which element type to use. Plain strain triangular: CPE3
   el_type: CPE3
@@ -59,7 +59,7 @@ mesh:
   #                diameter colinear with x-axis. Half-space generated for -ve y.
   # - "poly" : Polygonal solid. Specify corners using coordinates in "geom" field. Note that no
   #            checks are made to ensure the geometry is valid.
-  profile: halfcirc
+  profile: poly
   
   # Geometry. Assumes coordinates are listed contiguously starting at the top right, moving
   # clockwise. Do not repeat the first coordinate to complete the segments. Note that the first 
@@ -67,12 +67,16 @@ mesh:
   geom:
     # <double list> REQUIRED List of x-coordinates used to generate geometry.
     x: 
-     - 45.0e-3
-     - -45.0e-3
+     - 35.0e-3
+     - 35.0e-3
+     - -12.5e-3
+     - -12.5e-3
      
     # <double list> REQUIRED List of y-coordinates used to generate geometry.
     y: 
      - 0.0
+     - -25.0e-3
+     - -25.0e-3
      - 0.0
      
     # <int list> OPTIONAL List of walls which will be used to generate SRM layers. 0th wall 
@@ -84,6 +88,7 @@ mesh:
     # the shorter, resulting in the same results as an n-shaped geometry).
     SRM:
      - 0
+     - 2
      
   # OPTIONAL Filleted corner. Currently only one supported.
   # fillet:
@@ -96,21 +101,31 @@ mesh:
      
   # OPTIONAL Side-drilled hole parameters. Note that checks are not made to ensure the hole is
   # entirely contained within the geometry. Each hole treated independently in order.
-  # sdh:
-    # # <double list> REQUIRED List of x-coordinates of SDHs.
-    # x: 
-     # - 0.0e-3
-     # - 0.5e-3
+  sdh:
+    # <double list> REQUIRED List of x-coordinates of SDHs.
+    x: 
+     - 0.0e-3
+     - 16.25e-3
+     - 32.5e-3
+     - 32.5e-3
      
-    # # <double list> REQUIRED List of y-coordinates of SDHs.
-    # y: 
-     # - -17.5e-3
-     # - -17.5e-3
+    # <double list> REQUIRED List of y-coordinates of SDHs.
+    y: 
+     - -17.5e-3
+     - -17.5e-3
+     - -5.625e-3
+     - -16.875e-3
      
-    # # <double list> REQUIRED List of radii for SDHs.
-    # r: 
-     # - 0.2e-3
-     # - 0.25e-3
+    # <double list> REQUIRED List of radii for SDHs.
+    r: 
+     - 2.0e-3
+     - 2.0e-3
+     - 2.0e-3
+     - 2.0e-3
+     
+    # <bool> OPTIONAL Whether to generate a mesh without a defect, but with nodes in the same place.
+    # If not included, assume that no blank is required; take default value False.
+    doBlank: True
      
      
 
@@ -140,8 +155,7 @@ output:
     # - "rand" : Intended for use with "halfcirc" profile; grab random nodes within the mesh.
     # - "active" : For use with PAUT, records the input signal on the active element only for each
     #              input file.
-    # - <int> : Chooses the element set El<int>.
-    set: 1
+    set: active
     
     # <str> OPTIONAL Which sets to use for recording outputs. Required if "set" is not included.
     # - <int>, <int> : (e.g. "sets: 1, 32") Intended for use with "poly" profile and FMC datasets.
@@ -158,5 +172,5 @@ output:
     # <double> OPTIONAL Time step with which to capture data.
     t_int: 5e-9
     
-    # <str> OPTIONAL Identifier for which node or element set to record output.
-    set: rand
+    # <str> OPTIONAL Which sets to use for recording outputs.
+    sets: 1, 32

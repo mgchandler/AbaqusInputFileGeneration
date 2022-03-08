@@ -1,6 +1,6 @@
 job:
   # <str> REQUIRED Name used for file generation. Should contain no spaces or special characters.
-  name: D_rdm1_100npw
+  name: D_rdm1_15npw
 
 
 
@@ -49,7 +49,7 @@ probe:
 
 mesh:
   # <int> REQUIRED Number of nodes which will be generated per wavelength. Should be >10.
-  n_per_wl: 100
+  n_per_wl: 45
   
   # <str> REQUIRED Code for which element type to use. Plain strain triangular: CPE3
   el_type: CPE3
@@ -67,8 +67,8 @@ mesh:
   geom:
     # <double list> REQUIRED List of x-coordinates used to generate geometry.
     x: 
-     - 30.0e-3
-     - -30.0e-3
+     - 45.0e-3
+     - -45.0e-3
      
     # <double list> REQUIRED List of y-coordinates used to generate geometry.
     y: 
@@ -112,12 +112,16 @@ mesh:
      # - 0.2e-3
      # - 0.25e-3
      
+    # # <bool> OPTIONAL Whether to generate a mesh without a defect, but with nodes in the same place.
+    # # If not included, assume that no blank is required; take default value False.
+    # doBlank: False
+     
      
 
 # <str list> REQUIRED List of which output fields to capture. Name of each field should be the
 # field name in Abaqus. Common to use displacement "U".
 output:
- - U:
+ - CF2:
     # <str> REQUIRED "field" or "history".
     type: history
     
@@ -126,26 +130,37 @@ output:
     
     # <int> OPTIONAL Frequency with which to capture data. Often used for history. Required if
     # "t_int" is not included.
-    freq: 4
+    # freq: 4
     
     # <double> OPTIONAL Time step with which to capture data. Often used for field. Required if
-    # "freq" is not included.
-    # t_int: 5e-9
+    # "freq" is not included. Note: this increment will only approximate the actual one used, as
+    # it will be converted to freq = t_int / model_time_step.
+    t_int: 5e-9
     
     # <str> OPTIONAL Identifier for which node or element set to record output. Required if "sets"
     # is not included.
     # - "arc" : Intended for use with "halfcirc" profile; generate arcs with regular radial spacing
     #           at a set number of angles.
     # - "rand" : Intended for use with "halfcirc" profile; grab random nodes within the mesh.
-    set: rand
+    # - "active" : For use with PAUT, records the input signal on the active element only for each
+    #              input file.
+    # - <int> : Chooses the element set El<int>.
+    set: 1
     
     # <str> OPTIONAL Which sets to use for recording outputs. Required if "set" is not included.
     # - <int>, <int> : (e.g. "sets: 1, 32") Intended for use with "poly" profile and FMC datasets.
     #                  Records history for all probes contained within these values (inlusive).
     # sets: 1, 32
     
- # - U:
-    # type: field
-    # output: Node
-    # t_int: 5e-8
-    # set: All_nodes
+ - U:
+    # <str> REQUIRED "field" or "history".
+    type: history
+    
+    # <str> REQUIRED "Node" or "Element"
+    output: Node
+    
+    # <double> OPTIONAL Time step with which to capture data.
+    t_int: 5e-9
+    
+    # <str> OPTIONAL Identifier for which node or element set to record output.
+    set: rand

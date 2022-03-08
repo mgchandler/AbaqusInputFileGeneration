@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 """
+Generates input files (.inp) for Abaqus based on a config file (.yml). To call
+from the command line, run "python AbaqusInputGeneration.py <config file>" or
+"python AbaqusInputGeneration.py <config file>.yml"
+
 Adapted on Tue Jun 18 17:28:19 2021
 
 @author: mc16535
@@ -197,12 +201,15 @@ def generate_input(settings):
         settings['mesh']['geom']['x'],
         settings['mesh']['geom']['y']
     ])
-    assert ext_corners[1, 0] == 0 and ext_corners[1, -1] == 0, "First and last coordinates are not colinear with x-axis."
+    if ext_corners[1, 0] != 0 and ext_corners[1, -1] != 0:
+        raise ValueError("First and last coordinates are not colinear with x-axis.")
     profile = settings['mesh']['profile']
     
     if profile == "halfcirc":
-        assert ext_corners.shape[1] == 2, "More than two points defined for half-circle diameter."
-        assert np.abs(ext_corners[0, 0] + ext_corners[0, -1]) < 2e-13, "Centre of half-circle is not at the origin."
+        if ext_corners.shape[1] != 2:
+            raise ValueError("More than two points defined for half-circle diameter.")
+        if np.abs(ext_corners[0, 0] + ext_corners[0, -1]) >= 2e-13:
+            raise ValueError("Centre of half-circle is not at the origin.")
         # Maximum distance equal to the radius including the SRM.
         max_dist = abs(ext_corners[0, -1] - ext_corners[0, 0])/2 + 1.5*lam_L
     
@@ -216,7 +223,7 @@ def generate_input(settings):
             np.imag(outerDwall)
         ])
     elif profile == "poly":
-        max_dist = np.sqrt(max(ext_corners[0, :]) - min(ext_corners[0, :])**2 + max(ext_corners[1, :]) - min(ext_corners[1, :])**2)
+        max_dist = np.sqrt((max(ext_corners[0, :]) - min(ext_corners[0, :]))**2 + (max(ext_corners[1, :]) - min(ext_corners[1, :]))**2)
     else:
         raise ValueError("Invalid profile specified.")
     
@@ -345,7 +352,8 @@ def generate_input(settings):
             if 'fillet' not in settings['mesh'].keys():
                 fillet_idx = 0
                 N_fillet = 0
-            assert boundary != fillet_idx - N_probe_coords
+            if boundary == fillet_idx - N_probe_coords:
+                raise ValueError("SRM layer on fillet.")
             if boundary < fillet_idx - N_probe_coords:
                 boundaries[b_counter] = N_probe_coords + N_SRM + boundary
             elif boundary > fillet_idx - N_probe_coords:
@@ -387,7 +395,7 @@ def generate_input(settings):
             N_hole = int(np.round(2*np.pi*rS[hole] / dx))
             N_holes.append(N_hole)
             jj = np.linspace(1, N_hole, N_hole)
-            SDH = np.exp(2*np.pi*1j * jj/N_hole) * rS[hole]
+            SDH = np.exp(2.0j*np.pi * jj/N_hole) * rS[hole]
             x_full = np.append(hole_nodes[0, :], np.real(SDH) + xS[hole])
             y_full = np.append(hole_nodes[1, :], np.imag(SDH) + yS[hole])
             hole_nodes = np.array([x_full, y_full])
@@ -403,25 +411,32 @@ def generate_input(settings):
     
     #%% Write input files.
     
-    if profile == "halfcirc":
+    # If we have no holes in the geometry (often when dealing with half-space)
+    if sum(N_holes) == 0:
         job_name_template = '{}'.format(settings['job']['name'])
-        if sum(N_holes) == 0:
-            hole_locs = np.zeros((2,0))
-        else:
-            hole_locs = np.array([xS, yS])
+        hole_locs = np.zeros((2,0))
         write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, SRM_nodes=SRM_nodes, SRM_internal_nodes=SRM_internal_nodes, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs, outer_rad=max_dist-1.5*lam_L, inner_rad=5.0e-3)
-    elif profile == "poly":
-        # Make as many as there are holes to model, as well as an extra blank case.
-        for doHole in range(len(xS)+1):
-            if doHole in range(len(xS)):
-                job_name_template = '{}_{}'.format(settings['job']['name'], doHole+1)
-                hole_locs = np.reshape([xS[doHole], yS[doHole]], (2,1))
-            else:
+    # If we have holes in the geometry (eg. plate or L-shape)
+    else:
+        # Do all the jobs which contain holes
+        for doHole in range(len(xS)):
+            job_name_template = '{}_{}'.format(settings['job']['name'], doHole+1)
+            hole_locs = np.reshape([xS[doHole], yS[doHole]], (2,1))
+            if profile == "poly":
+                write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, boundaries=boundaries, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs)
+            elif profile == "halfcirc":
+                write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, SRM_nodes=SRM_nodes, SRM_internal_nodes=SRM_internal_nodes, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs, outer_rad=max_dist-1.5*lam_L, inner_rad=5.0e-3)
+        # Do we also require a blank case?
+        if 'doBlank' in settings['mesh']['sdh'].keys():
+            if settings['mesh']['sdh']['doBlank']:
                 job_name_template = '{}_b'.format(settings['job']['name'])
                 hole_locs = np.zeros((2,0))
-            write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, boundaries=boundaries, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs)
-        
-        
+                if profile == "poly":
+                    write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, boundaries=boundaries, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs)
+                elif profile == "halfcirc":
+                    write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, SRM_nodes=SRM_nodes, SRM_internal_nodes=SRM_internal_nodes, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs, outer_rad=max_dist-1.5*lam_L, inner_rad=5.0e-3)
+
+
         
 def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, maxdist, SRM_n_layers=0, SRM_nodes=None, SRM_internal_nodes=None, boundaries=None, N_SRM=0, hole_nodes=None, N_holes=[0], hole_locs=np.zeros((2,0)), outer_rad=20.0e-3, inner_rad=5e-3):
     # SRM_internal_nodes defaults to None for compatibility with "poly" profile.
@@ -435,8 +450,8 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
         for layer in SRM_internal_nodes:
             numNodes += layer.shape[1]
     
-    # all_the_nodes = np.zeros((2, int(1.25*numNodes))) #Arbitrary large array; used for plotting only.
-    # node_segments = np.zeros((2, int(1.25*numNodes))) #Arbitrary large array; used for plotting only.
+    all_the_nodes = np.zeros((2, int(1.25*numNodes))) #Arbitrary large array; used for plotting only.
+    node_segments = np.zeros((2, int(1.25*numNodes)), dtype=int) #Arbitrary large array; used for plotting only.
     
     with open(filename, 'w') as f:
         # Write out the node numbers and locations
@@ -445,20 +460,20 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
         count = 1
         for ii in range(ext_corners.shape[1]):
             f.write('{}   {} {}\n'.format(count, ext_corners[0, ii], ext_corners[1, ii]))
-            # all_the_nodes[:, count-1] = [ext_corners[0, ii], ext_corners[1, ii]]
+            all_the_nodes[:, count-1] = [ext_corners[0, ii], ext_corners[1, ii]]
             count += 1
         # Write SDH nodes
         if hole_nodes is not None:
             for ii in range(hole_nodes.shape[1]):
                 f.write('{}   {} {}\n'.format(count, hole_nodes[0, ii], hole_nodes[1, ii]))
-                # all_the_nodes[:, count-1] = [hole_nodes[0, ii], hole_nodes[1, ii]]
+                all_the_nodes[:, count-1] = [hole_nodes[0, ii], hole_nodes[1, ii]]
                 count += 1
         # Write SRM layers
         if SRM_internal_nodes is not None:
             for layer in SRM_internal_nodes:
                 for jj in range(layer.shape[1]):
                     f.write('{}   {} {}\n'.format(count, layer[0, jj], layer[1, jj]))
-                    # all_the_nodes[:, count-1] = [layer[0, jj], layer[1, jj]]
+                    all_the_nodes[:, count-1] = [layer[0, jj], layer[1, jj]]
                     count += 1
         
         
@@ -472,7 +487,7 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
         # Write outer vertices (i.e. walls of geometry)
         for ii in range(ext_corners.shape[1]):
             f.write('{}    {} {} {}\n'.format(count, (ii+1), (ii+1)%ext_corners.shape[1]+1, 1))
-            # node_segments[:, count-1] = [(ii+1), (ii+1)%ext_corners.shape[1]+1]
+            node_segments[:, count-1] = [(ii+1), (ii+1)%ext_corners.shape[1]+1]
             count += 1
         # Write SDH vertices
         if sum(N_holes) != 0:
@@ -480,7 +495,7 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
             for nn in range(len(N_holes)):
                 for ii in range(N_holes[nn]):
                     f.write('{}    {} {} {}\n'.format(count, ii+1 + ext_corners.shape[1] + sum(N_holes[:nn]), (ii+1)%N_holes[nn]+1 + ext_corners.shape[1] + sum(N_holes[:nn]), 2))
-                    # node_segments[:, count-1] = [ii+1 + ext_corners.shape[1] + sum(N_holes[:nn]), (ii+1)%N_holes[nn]+1 + ext_corners.shape[1] + sum(N_holes[:nn])]
+                    node_segments[:, count-1] = [ii+1 + ext_corners.shape[1] + sum(N_holes[:nn]), (ii+1)%N_holes[nn]+1 + ext_corners.shape[1] + sum(N_holes[:nn])]
                     count += 1
         # Write internal SRM vertices (pre-defined element edges. Not walls)
         if N_SRM != 0:
@@ -489,24 +504,25 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
                 for ii in range(SRM_n_layers-1):
                     layer = SRM_internal_nodes[ii]
                     f.write('{}    {} {} {}\n'.format(count, N_probe_coords+ii+1, count-ii, 3))
-                    # node_segments[:, count-1] = [N_probe_coords+ii+1, count-ii]
+                    node_segments[:, count-1] = [N_probe_coords+ii+1, count-ii]
                     count += 1
                     for jj in range(layer.shape[1]-1):
                         f.write('{}    {} {} {}\n'.format(count, count-1-ii, count-ii, 3))
-                        # node_segments[:, count-1] = [count-1-ii, count-ii]
+                        node_segments[:, count-1] = [count-1-ii, count-ii]
                         count += 1
-                    f.write('{}    {} {} {}\n'.format(count, count-1-ii, ext_corners.shape[1]+sum(N_holes)-ii, 3))
-                    # node_segments[:, count-1] = [count-1-ii, ext_corners.shape[1]+sum(N_holes)-ii]
+                    f.write('{}    {} {} {}\n'.format(count, count-1-ii, ext_corners.shape[1]-ii, 3))
+                    node_segments[:, count-1] = [count-1-ii, ext_corners.shape[1]-ii]
                     count += 1
             # We must be working with polygonal space.
             else:
-                assert boundaries is not None, "boundaries for SRM not specified in polygonal geometry."
+                if boundaries is None:
+                    raise ValueError("Boundaries for SRM not specified in polygonal geometry.")
                 for boundary in boundaries:
                     SRM_start_idx = boundary
                 
                     for ii in range(SRM_n_layers-1):
                         f.write('{}    {} {} {}\n'.format(count, SRM_start_idx+ii+1, SRM_start_idx+2*SRM_n_layers-ii, 3)) #Maybe change these back to 3, 4 if meshing doesn't work in ABQ
-                        # node_segments[:, count-1] = [SRM_start_idx+ii+1, SRM_start_idx+2*SRM_n_layers-ii]
+                        node_segments[:, count-1] = [SRM_start_idx+ii+1, SRM_start_idx+2*SRM_n_layers-ii]
                         count += 1
                      
         # Write out the hole locations.
@@ -578,7 +594,7 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
     if 'time_len' in settings['probe'].keys():
         step_time_length = float(settings['probe']['time_len'])
     else:        
-        step_time_length = 1.1 * maxdist / v_S
+        step_time_length = 2.25 * maxdist / v_S
         
     Est_runtime = n_elements * (step_time_length / time_step) * Approx_time_per_el_per_step
     if Est_runtime < 60:
@@ -787,7 +803,8 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
     
     if 'amplitude' in settings['probe'].keys():
         oldAmplitude = np.loadtxt(settings['probe']['amplitude'], delimiter=',')
-        assert np.abs((oldAmplitude[1,0] - oldAmplitude[0,0]) - 2e-8) < 2e-13
+        if np.abs((oldAmplitude[1,0] - oldAmplitude[0,0]) - 2e-8) >= 2e-13:
+            raise ValueError("Amplitude time increment from file is expected to be .02us")
         # If amplitude has spacing 2e-8 then we can get to time_step by dividing
         # by n_per_wavelength
         oldSize = oldAmplitude.shape[0] - 1
@@ -845,7 +862,7 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
             # Create node sets corresponding to each element in the array
             for element in range(num_els):
                 i.write('*Nset, nset=El{}\n'.format(element+1))
-                for a in range(N_probe_coords):
+                for a in range(num_nodes_on_tx):
                     i.write('{},\n '.format(element*num_nodes_on_tx + a + 1))
                     
             # upToMeas = ext_corners.shape[1]
@@ -966,20 +983,22 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
             print('Tx = {} written'.format(el+1))
     
     print('Input file written')
-    
-    
-    
+
+
+
 #%% Main run sequence
 
 if __name__ == '__main__':
     # If python script is being run from the command line
-    if len(sys.argv) > 1:
-        yaml_name = '{}.yml'.format(sys.argv[1])
-    # If script is being run from an editor
+    if len(sys.argv) == 2:
+        if sys.argv[1][-4:] != '.yml':
+            yaml_name = '{}.yml'.format(sys.argv[1])
+        else:
+            yaml_name = sys.argv[1]
+    # Assume that the script is being run on Windows in an IDE console.
     else:
-        yaml_name = 'I_45npw.yml'
-        # yaml_name = "D_1.yml"
-        os.chdir(r'C:\Users\mc16535\OneDrive - University of Bristol\Documents\Postgrad\Coding\Abaqus\FMC Generation\v9\Output\Phase Difference Study\Block w defects')
+        yaml_name = 'D_scat.yml'
+        
     # Open and read .yml
     settings = read_settings(yaml_name)
     # Write inputs for all transmitters in FMC

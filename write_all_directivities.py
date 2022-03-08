@@ -5,6 +5,13 @@
 # i.e. at the command prompt, use command "abaqus python write_all_direcitivities.py
 # <odb_filename>.odb" in the directory containing the files.
 
+# N.B. This code assumes that the yaml module for Python 2.7.3 is installed at
+# "C:\Python27\Lib\site-packages" if running on Windows, or "/user/home/mc16535/Admin/PythonModules"
+# if running on Linux (BluePebble Cluster). If the user installs the right version
+# of Python and yaml on Windows, this should automatically work; users on the cluster
+# or other Linux distros will have to upload/install yaml and manually update the path
+# themselves.
+
 # A timetrace is defined as U2 History Output data.
 
 from __future__ import print_function # For progress bar
@@ -169,7 +176,13 @@ except AssertionError:
     isCommand = False
     import matplotlib.pyplot as plt
     
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError:
+    if "linux" in sys.platform:
+        raise ModuleNotFoundError(r'Module "yaml" expected at location /user/home/mc16535/Admin/PythonModules')
+    else:
+        raise ModuleNotFoundError(r'Module "yaml" expected at location C:\Python27\Lib\site-packages')
 
 t0 = time.time()
 

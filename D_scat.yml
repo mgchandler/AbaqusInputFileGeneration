@@ -1,6 +1,6 @@
 job:
   # <str> REQUIRED Name used for file generation. Should contain no spaces or special characters.
-  name: D_rdm1_15npw
+  name: D_scat
 
 
 
@@ -67,8 +67,8 @@ mesh:
   geom:
     # <double list> REQUIRED List of x-coordinates used to generate geometry.
     x: 
-     - 45.0e-3
-     - -45.0e-3
+     - 17.5e-3
+     - -17.5e-3
      
     # <double list> REQUIRED List of y-coordinates used to generate geometry.
     y: 
@@ -96,25 +96,25 @@ mesh:
      
   # OPTIONAL Side-drilled hole parameters. Note that checks are not made to ensure the hole is
   # entirely contained within the geometry. Each hole treated independently in order.
-  # sdh:
-    # # <double list> REQUIRED List of x-coordinates of SDHs.
-    # x: 
-     # - 0.0e-3
-     # - 0.5e-3
+  sdh:
+    # <double list> REQUIRED List of x-coordinates of SDHs.
+    x: 
+     - 0.0e-3
+    #  - 3.8823e-3
      
-    # # <double list> REQUIRED List of y-coordinates of SDHs.
-    # y: 
-     # - -17.5e-3
-     # - -17.5e-3
+    # <double list> REQUIRED List of y-coordinates of SDHs.
+    y: 
+     - -15.0e-3
+    #  - -14.4889e-3
      
-    # # <double list> REQUIRED List of radii for SDHs.
-    # r: 
-     # - 0.2e-3
-     # - 0.25e-3
+    # <double list> REQUIRED List of radii for SDHs.
+    r: 
+     - 0.2e-3
+    #  - 0.2e-3
      
-    # # <bool> OPTIONAL Whether to generate a mesh without a defect, but with nodes in the same place.
-    # # If not included, assume that no blank is required; take default value False.
-    # doBlank: False
+    # <bool> OPTIONAL Whether to generate a mesh without a defect, but with nodes in the same place.
+    # If not included, assume that no blank is required; take default value False.
+    doBlank: True
      
      
 
@@ -144,13 +144,25 @@ output:
     # - "rand" : Intended for use with "halfcirc" profile; grab random nodes within the mesh.
     # - "active" : For use with PAUT, records the input signal on the active element only for each
     #              input file.
-    # - <int> : Chooses the element set El<int>.
     set: 1
     
     # <str> OPTIONAL Which sets to use for recording outputs. Required if "set" is not included.
     # - <int>, <int> : (e.g. "sets: 1, 32") Intended for use with "poly" profile and FMC datasets.
     #                  Records history for all probes contained within these values (inlusive).
     # sets: 1, 32
+    
+ - A:
+    # <str> REQUIRED "field" or "history".
+    type: history
+    
+    # <str> REQUIRED "Node" or "Element"
+    output: Node
+    
+    # <double> OPTIONAL Time step with which to capture data.
+    t_int: 5e-9
+    
+    # <str> OPTIONAL Which sets to use for recording outputs.
+    set: 1
     
  - U:
     # <str> REQUIRED "field" or "history".
@@ -162,5 +174,11 @@ output:
     # <double> OPTIONAL Time step with which to capture data.
     t_int: 5e-9
     
-    # <str> OPTIONAL Identifier for which node or element set to record output.
-    set: rand
+    # <str> OPTIONAL Which sets to use for recording outputs.
+    set: 1
+ 
+ - U:
+    type: field
+    output: Node
+    t_int: 1e-8
+    set: All_nodes

@@ -172,10 +172,12 @@ try:
         yaml_path = r"C:\Python27\Lib\site-packages"
         sys.path.append(yaml_path)
 # Running from console. yaml must be installed; do not worry about path.
+# Save to same directory as write_all_directivities.py, unless running in
+# IDE console.
 except AssertionError:
     odb_name = 'D_rdm1_45npw.dat'
     filename = odb_name[:-3]+'dir_.dat'
-    os.chdir(r"C:\Users\mc16535\OneDrive - University of Bristol\Documents\Postgrad\Coding\Abaqus\AbaqusInputFileGeneration - Output\v9\Output\Phase Difference Study\Directivity - read input")
+    os.chdir(r"..\AbaqusInputFileGeneration - Output\v9\Output\Phase Difference Study\Directivity - read input")
     isCommand = False
     import matplotlib.pyplot as plt
     

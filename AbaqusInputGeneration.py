@@ -17,6 +17,7 @@ Original script created on Wed Jan 20 09:34:36 2016
 import numpy as np
 from numpy.random import default_rng
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -418,14 +419,6 @@ def generate_input(settings):
         write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, SRM_nodes=SRM_nodes, SRM_internal_nodes=SRM_internal_nodes, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs, outer_rad=max_dist-1.5*lam_L, inner_rad=5.0e-3)
     # If we have holes in the geometry (eg. plate or L-shape)
     else:
-        # Do all the jobs which contain holes
-        for doHole in range(len(xS)):
-            job_name_template = '{}_{}'.format(settings['job']['name'], doHole+1)
-            hole_locs = np.reshape([xS[doHole], yS[doHole]], (2,1))
-            if profile == "poly":
-                write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, boundaries=boundaries, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs)
-            elif profile == "halfcirc":
-                write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, SRM_nodes=SRM_nodes, SRM_internal_nodes=SRM_internal_nodes, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs, outer_rad=max_dist-1.5*lam_L, inner_rad=5.0e-3)
         # Do we also require a blank case?
         if 'doBlank' in settings['mesh']['sdh'].keys():
             if settings['mesh']['sdh']['doBlank']:
@@ -435,105 +428,149 @@ def generate_input(settings):
                     write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, boundaries=boundaries, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs)
                 elif profile == "halfcirc":
                     write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, SRM_nodes=SRM_nodes, SRM_internal_nodes=SRM_internal_nodes, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs, outer_rad=max_dist-1.5*lam_L, inner_rad=5.0e-3)
+        # Do all the jobs which contain holes
+        for doHole in range(len(xS)):
+            job_name_template = '{}_{}'.format(settings['job']['name'], doHole+1)
+            hole_locs = np.reshape([xS[doHole], yS[doHole]], (2,1))
+            if profile == "poly":
+                write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, boundaries=boundaries, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs)
+            elif profile == "halfcirc":
+                write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, max_dist, SRM_n_layers=SRM_n_layers, SRM_nodes=SRM_nodes, SRM_internal_nodes=SRM_internal_nodes, N_SRM=N_SRM, hole_nodes=hole_nodes, N_holes=N_holes, hole_locs=hole_locs, outer_rad=max_dist-1.5*lam_L, inner_rad=5.0e-3)
 
 
         
 def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, maxdist, SRM_n_layers=0, SRM_nodes=None, SRM_internal_nodes=None, boundaries=None, N_SRM=0, hole_nodes=None, N_holes=[0], hole_locs=np.zeros((2,0)), outer_rad=20.0e-3, inner_rad=5e-3):
     # SRM_internal_nodes defaults to None for compatibility with "poly" profile.
     
-    # .poly file used as input for Triangle (meshing algorithm). 
-    # http://www.cs.cmu.edu/~quake/triangle.poly.html
-    filename = '{}.poly'.format(job_name_template)
+    # If using a blank case, check if a .poly file already exists.
+    if "doBlank" in settings['mesh']['sdh'].keys():
+        poly_name_query = job_name_template[:-2] + '_b.1.poly'
+        blankPolyExists = False
+        for filename in os.listdir():
+            if poly_name_query == filename:
+                poly_name = filename
+                blankPolyExists = True
+        # Get the names of the .ele and .node files as well
+        if blankPolyExists:
+            for filename in os.listdir():
+                if poly_name_query[:-4]+'ele' == filename:
+                    ele_name = filename
+                elif poly_name_query[:-4]+'node' == filename:
+                    node_name = filename
+        
+        # If .poly file for case with no defect does not exist, make a new .poly
+        # file for this case.
+        if not blankPolyExists:
     
-    numNodes = ext_corners.shape[1] + sum(N_holes)
-    if SRM_internal_nodes is not None:
-        for layer in SRM_internal_nodes:
-            numNodes += layer.shape[1]
-    
-    all_the_nodes = np.zeros((2, int(1.25*numNodes))) #Arbitrary large array; used for plotting only.
-    node_segments = np.zeros((2, int(1.25*numNodes)), dtype=int) #Arbitrary large array; used for plotting only.
-    
-    with open(filename, 'w') as f:
-        # Write out the node numbers and locations
-        f.write('{} 2 0 0\n'.format(numNodes)) #num points, 2 dimensions, no attributes, no boundary markers
-        # Write external corners
-        count = 1
-        for ii in range(ext_corners.shape[1]):
-            f.write('{}   {} {}\n'.format(count, ext_corners[0, ii], ext_corners[1, ii]))
-            all_the_nodes[:, count-1] = [ext_corners[0, ii], ext_corners[1, ii]]
-            count += 1
-        # Write SDH nodes
-        if hole_nodes is not None:
-            for ii in range(hole_nodes.shape[1]):
-                f.write('{}   {} {}\n'.format(count, hole_nodes[0, ii], hole_nodes[1, ii]))
-                all_the_nodes[:, count-1] = [hole_nodes[0, ii], hole_nodes[1, ii]]
-                count += 1
-        # Write SRM layers
-        if SRM_internal_nodes is not None:
-            for layer in SRM_internal_nodes:
-                for jj in range(layer.shape[1]):
-                    f.write('{}   {} {}\n'.format(count, layer[0, jj], layer[1, jj]))
-                    all_the_nodes[:, count-1] = [layer[0, jj], layer[1, jj]]
-                    count += 1
-        
-        
-        
-        # Write out the number of segments and number of boundary markers
-        numSegments = ext_corners.shape[1] + N_SRM + sum(N_holes)
-        
-        f.write('{} 1\n'.format(numSegments)) #number of segments, number of boundary markers
-        count = 1
-        
-        # Write outer vertices (i.e. walls of geometry)
-        for ii in range(ext_corners.shape[1]):
-            f.write('{}    {} {} {}\n'.format(count, (ii+1), (ii+1)%ext_corners.shape[1]+1, 1))
-            node_segments[:, count-1] = [(ii+1), (ii+1)%ext_corners.shape[1]+1]
-            count += 1
-        # Write SDH vertices
-        if sum(N_holes) != 0:
-            #Hole vertices (i.e. inner wall for scatterer)
-            for nn in range(len(N_holes)):
-                for ii in range(N_holes[nn]):
-                    f.write('{}    {} {} {}\n'.format(count, ii+1 + ext_corners.shape[1] + sum(N_holes[:nn]), (ii+1)%N_holes[nn]+1 + ext_corners.shape[1] + sum(N_holes[:nn]), 2))
-                    node_segments[:, count-1] = [ii+1 + ext_corners.shape[1] + sum(N_holes[:nn]), (ii+1)%N_holes[nn]+1 + ext_corners.shape[1] + sum(N_holes[:nn])]
-                    count += 1
-        # Write internal SRM vertices (pre-defined element edges. Not walls)
-        if N_SRM != 0:
-            # If we're working with the half-space
+            # .poly file used as input for Triangle (meshing algorithm). 
+            # http://www.cs.cmu.edu/~quake/triangle.poly.html
+            filename = '{}.poly'.format(job_name_template)
+            
+            numNodes = ext_corners.shape[1] + sum(N_holes)
             if SRM_internal_nodes is not None:
-                for ii in range(SRM_n_layers-1):
-                    layer = SRM_internal_nodes[ii]
-                    f.write('{}    {} {} {}\n'.format(count, N_probe_coords+ii+1, count-ii, 3))
-                    node_segments[:, count-1] = [N_probe_coords+ii+1, count-ii]
-                    count += 1
-                    for jj in range(layer.shape[1]-1):
-                        f.write('{}    {} {} {}\n'.format(count, count-1-ii, count-ii, 3))
-                        node_segments[:, count-1] = [count-1-ii, count-ii]
-                        count += 1
-                    f.write('{}    {} {} {}\n'.format(count, count-1-ii, ext_corners.shape[1]-ii, 3))
-                    node_segments[:, count-1] = [count-1-ii, ext_corners.shape[1]-ii]
-                    count += 1
-            # We must be working with polygonal space.
-            else:
-                if boundaries is None:
-                    raise ValueError("Boundaries for SRM not specified in polygonal geometry.")
-                for boundary in boundaries:
-                    SRM_start_idx = boundary
+                for layer in SRM_internal_nodes:
+                    numNodes += layer.shape[1]
                 
-                    for ii in range(SRM_n_layers-1):
-                        f.write('{}    {} {} {}\n'.format(count, SRM_start_idx+ii+1, SRM_start_idx+2*SRM_n_layers-ii, 3)) #Maybe change these back to 3, 4 if meshing doesn't work in ABQ
-                        node_segments[:, count-1] = [SRM_start_idx+ii+1, SRM_start_idx+2*SRM_n_layers-ii]
+            # Write out the number of segments and number of boundary markers
+            numSegments = ext_corners.shape[1] + N_SRM + sum(N_holes)
+            
+            all_the_nodes = np.zeros((2, int(1.25*numNodes))) #Arbitrary large array; used for plotting only.
+            node_segments = np.zeros((2, int(1.25*numSegments)), dtype=int) #Arbitrary large array; used for plotting only.
+            
+            with open(filename, 'w') as f:
+                # Write out the node numbers and locations
+                f.write('{} 2 0 0\n'.format(numNodes)) #num points, 2 dimensions, no attributes, no boundary markers
+                # Write external corners
+                count = 1
+                for ii in range(ext_corners.shape[1]):
+                    f.write('{}   {} {}\n'.format(count, ext_corners[0, ii], ext_corners[1, ii]))
+                    all_the_nodes[:, count-1] = [ext_corners[0, ii], ext_corners[1, ii]]
+                    count += 1
+                # Write SDH nodes
+                if hole_nodes is not None:
+                    for ii in range(hole_nodes.shape[1]):
+                        f.write('{}   {} {}\n'.format(count, hole_nodes[0, ii], hole_nodes[1, ii]))
+                        all_the_nodes[:, count-1] = [hole_nodes[0, ii], hole_nodes[1, ii]]
                         count += 1
-                     
-        # Write out the hole locations.
-        if hole_locs.shape[1] > 0:
-            f.write('{}\n'.format(hole_locs.shape[1]))
-            for hole in range(hole_locs.shape[1]):
-                f.write('{}   {} {}\n'.format(hole+1, hole_locs[0, hole], hole_locs[1, hole]))
+                # Write SRM layers
+                if SRM_internal_nodes is not None:
+                    for layer in SRM_internal_nodes:
+                        for jj in range(layer.shape[1]):
+                            f.write('{}   {} {}\n'.format(count, layer[0, jj], layer[1, jj]))
+                            all_the_nodes[:, count-1] = [layer[0, jj], layer[1, jj]]
+                            count += 1
+                
+                
+                
+                f.write('{} 1\n'.format(numSegments)) #number of segments, number of boundary markers
+                count = 1
+                
+                # Write outer vertices (i.e. walls of geometry)
+                for ii in range(ext_corners.shape[1]):
+                    f.write('{}    {} {} {}\n'.format(count, (ii+1), (ii+1)%ext_corners.shape[1]+1, 1))
+                    node_segments[:, count-1] = [(ii+1), (ii+1)%ext_corners.shape[1]+1]
+                    count += 1
+                # Write SDH vertices
+                if sum(N_holes) != 0:
+                    #Hole vertices (i.e. inner wall for scatterer)
+                    for nn in range(len(N_holes)):
+                        for ii in range(N_holes[nn]):
+                            f.write('{}    {} {} {}\n'.format(count, ii+1 + ext_corners.shape[1] + sum(N_holes[:nn]), (ii+1)%N_holes[nn]+1 + ext_corners.shape[1] + sum(N_holes[:nn]), 2))
+                            node_segments[:, count-1] = [ii+1 + ext_corners.shape[1] + sum(N_holes[:nn]), (ii+1)%N_holes[nn]+1 + ext_corners.shape[1] + sum(N_holes[:nn])]
+                            count += 1
+                # Write internal SRM vertices (pre-defined element edges. Not walls)
+                if N_SRM != 0:
+                    # If we're working with the half-space
+                    if SRM_internal_nodes is not None:
+                        for ii in range(SRM_n_layers-1):
+                            layer = SRM_internal_nodes[ii]
+                            f.write('{}    {} {} {}\n'.format(count, N_probe_coords+ii+1, count-ii, 3))
+                            node_segments[:, count-1] = [N_probe_coords+ii+1, count-ii]
+                            count += 1
+                            for jj in range(layer.shape[1]-1):
+                                f.write('{}    {} {} {}\n'.format(count, count-1-ii, count-ii, 3))
+                                node_segments[:, count-1] = [count-1-ii, count-ii]
+                                count += 1
+                            f.write('{}    {} {} {}\n'.format(count, count-1-ii, ext_corners.shape[1]-ii, 3))
+                            node_segments[:, count-1] = [count-1-ii, ext_corners.shape[1]-ii]
+                            count += 1
+                    # We must be working with polygonal space.
+                    else:
+                        if boundaries is None:
+                            raise ValueError("Boundaries for SRM not specified in polygonal geometry.")
+                        for boundary in boundaries:
+                            SRM_start_idx = boundary
+                        
+                            for ii in range(SRM_n_layers-1):
+                                f.write('{}    {} {} {}\n'.format(count, SRM_start_idx+ii+1, SRM_start_idx+2*SRM_n_layers-ii, 3)) #Maybe change these back to 3, 4 if meshing doesn't work in ABQ
+                                node_segments[:, count-1] = [SRM_start_idx+ii+1, SRM_start_idx+2*SRM_n_layers-ii]
+                                count += 1
+                             
+                # Write out the hole locations.
+                if hole_locs.shape[1] > 0:
+                    f.write('{}\n'.format(hole_locs.shape[1]))
+                    for hole in range(hole_locs.shape[1]):
+                        f.write('{}   {} {}\n'.format(hole+1, hole_locs[0, hole], hole_locs[1, hole]))
+                else:
+                    f.write('0\n')
+        
+        # If there is a .poly for the non-defective case, make copies of the .poly,
+        # .ele and .node files, amending the hole location in the .poly file.
         else:
-            f.write('0\n')
-                    
-                 
+            filename = job_name_template+".poly"
+            shutil.copy2(ele_name, job_name_template+".ele")
+            shutil.copy2(node_name, job_name_template+".node")
+            with open(poly_name, 'r') as file:
+                poly_contents = file.readlines()
+            # Put the right number of holes into the blank file
+            poly_contents = poly_contents[:-2]
+            poly_contents.append("{}\n".format(hole_locs.shape[1]))
+            for hole in range(hole_locs.shape[1]):
+                poly_contents.append("   {}   {}  {}\n".format(hole+1, hole_locs[0, hole], hole_locs[1, hole]))
+            with open(filename, 'w') as file:
+                for line in poly_contents:
+                    file.write(line)
+            
                     
     # # Plot the geometry to make sure it looks as expected.
     # for ii in range(node_segments.shape[1]):
@@ -542,8 +579,6 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
     #                  [all_the_nodes[1][int(node_segments[0][ii])-1], all_the_nodes[1][int(node_segments[1][ii])-1]],
     #                  color='r', linewidth=0.1)
     # plt.show()
-        
-                
     
     density = settings['material']['density']
     modulus = settings['material']['modulus']
@@ -997,7 +1032,7 @@ if __name__ == '__main__':
             yaml_name = sys.argv[1]
     # Assume that the script is being run on Windows in an IDE console.
     else:
-        yaml_name = 'D_scat.yml'
+        yaml_name = 'I_45npw_02mm.yml'
         
     # Open and read .yml
     settings = read_settings(yaml_name)

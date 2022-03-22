@@ -383,11 +383,11 @@ def generate_input(settings):
     
     
     
-    if 'sdh' in settings['mesh'].keys():
+    if settings['mesh']['scat']['type'].lower() == 'sdh':
         # Create scattering object
-        xS = settings['mesh']['sdh']['x']
-        yS = settings['mesh']['sdh']['y']
-        rS = settings['mesh']['sdh']['r']
+        xS = settings['mesh']['scat']['x']
+        yS = settings['mesh']['scat']['y']
+        rS = settings['mesh']['scat']['r']
         
         # Generate nodes for the boundary of the scatterer.
         N_holes = []
@@ -420,8 +420,8 @@ def generate_input(settings):
     # If we have holes in the geometry (eg. plate or L-shape)
     else:
         # Do we also require a blank case?
-        if 'doBlank' in settings['mesh']['sdh'].keys():
-            if settings['mesh']['sdh']['doBlank']:
+        if 'doBlank' in settings['mesh']['scat'].keys():
+            if settings['mesh']['scat']['doBlank']:
                 job_name_template = '{}_b'.format(settings['job']['name'])
                 hole_locs = np.zeros((2,0))
                 if profile == "poly":
@@ -443,7 +443,7 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
     # SRM_internal_nodes defaults to None for compatibility with "poly" profile.
     
     # If using a blank case, check if a .poly file already exists.
-    if "doBlank" in settings['mesh']['sdh'].keys():
+    if "doBlank" in settings['mesh']['scat'].keys():
         poly_name_query = job_name_template[:-2] + '_b.1.poly'
         blankPolyExists = False
         for filename in os.listdir():

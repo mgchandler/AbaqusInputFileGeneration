@@ -101,7 +101,10 @@ mesh:
      
   # OPTIONAL Side-drilled hole parameters. Note that checks are not made to ensure the hole is
   # entirely contained within the geometry. Each hole treated independently in order.
-  sdh:
+  scat:
+    # <string> REQUIRED Label for the type of scatterer. Program is built to accept only 'sdh'.
+    type: sdh
+    
     # <double list> REQUIRED List of x-coordinates of SDHs.
     x: 
      - 0.0e-3

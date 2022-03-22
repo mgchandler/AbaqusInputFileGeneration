@@ -200,7 +200,7 @@ def generate_input(settings):
     dx = lam_L/n_per_wavelength # Approximate distance between nodes
     ext_corners = np.array([
         settings['mesh']['geom']['x'],
-        settings['mesh']['geom']['y']
+        settings['mesh']['geom']['z']
     ])
     if ext_corners[1, 0] != 0 and ext_corners[1, -1] != 0:
         raise ValueError("First and last coordinates are not colinear with x-axis.")
@@ -386,7 +386,7 @@ def generate_input(settings):
     if settings['mesh']['scat']['type'].lower() == 'sdh':
         # Create scattering object
         xS = settings['mesh']['scat']['x']
-        yS = settings['mesh']['scat']['y']
+        yS = settings['mesh']['scat']['z']
         rS = settings['mesh']['scat']['r']
         
         # Generate nodes for the boundary of the scatterer.

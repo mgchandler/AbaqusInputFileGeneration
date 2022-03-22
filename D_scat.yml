@@ -71,7 +71,7 @@ mesh:
      - -17.5e-3
      
     # <double list> REQUIRED List of y-coordinates used to generate geometry.
-    y: 
+    z: 
      - 0.0
      - 0.0
      
@@ -106,7 +106,7 @@ mesh:
     #  - 3.8823e-3
      
     # <double list> REQUIRED List of y-coordinates of SDHs.
-    y: 
+    z: 
      - -15.0e-3
     #  - -14.4889e-3
      

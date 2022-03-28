@@ -7,6 +7,7 @@
 # U1 (x-displacement), U2 (z-displacement), CF2 (z-force, concentrated). Timetraces
 # will be written for all nodes where there is data for the specified output field.
 
+import numpy as np
 from odbAccess import openOdb
 import sys
 
@@ -28,6 +29,14 @@ odb = openOdb(odb_name, readOnly=True)
 region = odb.steps['Step-1'].historyRegions
 keys = region.keys()
 
+sets = odb.rootAssembly.instances['PART-1-1'].nodeSets
+num_els = sum(np.char.count(sets.keys(), 'EL'))
+nodes_per_el = len(sets['EL1'].nodes)
+nodes_in_el = np.zeros((num_els, nodes_per_el), dtype=int)
+for el in range(num_els):
+	for node in range(nodes_per_el):
+		nodes_in_el[el, node] = int(sets['EL{}'.format(el+1)].nodes[node].label)
+
 with open(filename, 'w') as f:
 	for kk in range(len(keys)):
 		if output_field in region[keys[kk]].historyOutputs.keys():
@@ -36,7 +45,8 @@ with open(filename, 'w') as f:
 			
 			# Write timetraces
 			node_idx = filename.split('.')[1]
-			f.write('Node '+node_idx+'\n')
+			el_idx = np.where(nodes_in_el == int(node_idx))[0][0] + 1
+			f.write('Node-'+node_idx+' El{}\n'.format(el_idx))
 			
 			for line in range(len(data)):
 				f.write('{} {}\n'.format(data[line][0], data[line][1]))

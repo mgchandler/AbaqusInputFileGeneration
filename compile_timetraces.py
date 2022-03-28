@@ -24,7 +24,6 @@
 # not checked. It is also assumed that nodes within each element are equally spaced,
 # however this assumption is also not checked.
 
-import matplotlib.pyplot as plt
 import numpy as np
 import sys
 
@@ -80,6 +79,11 @@ with open(filename, 'r') as f:
             time_counter += 1
         else:
             continue
+
+# Remove any trend in the data.
+for el in range(num_els):
+    poly = np.polynomial.Polynomial.fit(timetraces[0, :, el], timetraces[1, :, el], 1).convert().coef
+    timetraces[1, :, el] -= poly[1] * timetraces[0, :, el] + poly[0]
 
 # Write out the FMC data.
 for rx in range(num_els):

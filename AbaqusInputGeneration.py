@@ -87,8 +87,49 @@ def read_settings(filename):
         settings = yaml.safe_load(f)
     return settings
 
+def point_wrt_line(linePoint1, linePoint2, checkPoint):
+    return (linePoint2[0] - linePoint1[0])*(checkPoint[1] - linePoint1[1]) - (linePoint2[1] - linePoint1[1])*(checkPoint[0] - linePoint1[0])
+
 def checkIfLeft(linePoint1, linePoint2, checkPoint):
-    return ((linePoint2[0] - linePoint1[0])*(checkPoint[1] - linePoint1[1]) - (linePoint2[1] - linePoint1[1])*(checkPoint[0] - linePoint1[0])) > -3e-16
+    return point_wrt_line(linePoint1, linePoint2, checkPoint) > -3e-16
+
+def is_intersection(a1, a2, b1, b2):
+    box_a_topleft     = [min(a1[0], a2[0]), min(a1[1], a2[1])]
+    box_a_bottomright = [max(a1[0], a2[0]), max(a1[1], a2[1])]
+    box_b_topleft     = [min(b1[0], b2[0]), min(b1[1], b2[1])]
+    box_b_bottomright = [max(b1[0], b2[0]), max(b1[1], b2[1])]
+    
+    is_overlap = (box_a_topleft[0]     <= box_b_bottomright[0] and
+                  box_a_bottomright[0] >= box_b_topleft[0] and
+                  box_a_topleft[1]     <= box_b_bottomright[1] and
+                  box_a_bottomright[1] >= box_b_topleft[1])
+    
+    if not is_overlap:
+        return False
+    
+    where_b1_wrt_a = point_wrt_line(a1, a2, b1)
+    where_b2_wrt_a = point_wrt_line(a1, a2, b2)
+    where_a1_wrt_b = point_wrt_line(b1, b2, a1)
+    where_a2_wrt_b = point_wrt_line(b1, b2, a2)
+    
+    is_b1_on_a = abs(where_b1_wrt_a) < np.finfo(float).eps
+    is_b2_on_a = abs(where_b2_wrt_a) < np.finfo(float).eps
+    is_a1_on_b = abs(where_a1_wrt_b) < np.finfo(float).eps
+    is_a2_on_b = abs(where_a2_wrt_b) < np.finfo(float).eps
+    
+    is_b1_right_of_a = where_b1_wrt_a < 0
+    is_b2_right_of_a = where_b2_wrt_a < 0
+    is_a1_right_of_b = where_a1_wrt_b < 0
+    is_a2_right_of_b = where_a2_wrt_b < 0
+    
+    touch_or_cross_a_b = (is_b1_right_of_a ^ is_b2_right_of_a) or (is_b1_on_a or is_b2_on_a)
+    touch_or_cross_b_a = (is_a1_right_of_b ^ is_a2_right_of_b) or (is_a1_on_b or is_a2_on_b)
+    
+    plt.plot([a1[0], a2[0]], [a1[1], a2[1]])
+    plt.plot([b1[0], b2[0]], [b1[1], b2[1]])
+    plt.show()
+    
+    return touch_or_cross_a_b and touch_or_cross_b_a and is_overlap
 
 
 
@@ -344,12 +385,31 @@ def generate_input(settings):
             
             SRM_thickness = 1.5 * lam_L
             SRM_n_layers = int(np.round(SRM_thickness / (dx)) + 1)
-            SRM_wall_dir = np.squeeze(ext_corners[:, boundary+1] - ext_corners[:, boundary])
-            wall_theta = np.arccos(SRM_wall_dir[1] / np.sqrt(SRM_wall_dir[0]**2 + SRM_wall_dir[1]**2))
-            SRM_nodes_out = np.array([np.linspace(ext_corners[0][boundary], ext_corners[0][boundary] - SRM_thickness*np.cos(wall_theta), SRM_n_layers),
-                                      np.linspace(ext_corners[1][boundary], ext_corners[1][boundary] - SRM_thickness*np.sin(wall_theta), SRM_n_layers)])
-            SRM_nodes_in =  np.array([np.linspace(ext_corners[0][boundary+1], ext_corners[0][boundary+1] - SRM_thickness*np.cos(wall_theta), SRM_n_layers),
-                                      np.linspace(ext_corners[1][boundary+1], ext_corners[1][boundary+1] - SRM_thickness*np.sin(wall_theta), SRM_n_layers)])
+            # # Wall direction and angle
+            # SRM_wall_dir = np.squeeze(ext_corners[:, boundary+1] - ext_corners[:, boundary])
+            # wall_theta = np.arccos(SRM_wall_dir[1] / np.sqrt(SRM_wall_dir[0]**2 + SRM_wall_dir[1]**2))
+            # # List of SRM nodes on the wall when working clockwise around the polygonal geometry.
+            # SRM_nodes_out = np.array([np.linspace(ext_corners[0][boundary], ext_corners[0][boundary] - SRM_thickness*np.cos(wall_theta), SRM_n_layers),
+            #                           np.linspace(ext_corners[1][boundary], ext_corners[1][boundary] - SRM_thickness*np.sin(wall_theta), SRM_n_layers)])
+            # SRM_nodes_in =  np.array([np.linspace(ext_corners[0][boundary+1], ext_corners[0][boundary+1] - SRM_thickness*np.cos(wall_theta), SRM_n_layers),
+            #                           np.linspace(ext_corners[1][boundary+1], ext_corners[1][boundary+1] - SRM_thickness*np.sin(wall_theta), SRM_n_layers)])
+            # # SRM_nodes = np.append(SRM_nodes_out, np.flip(SRM_nodes_in, axis=1), axis=1)
+            
+            # Outgoing wall direction
+            SRM_out_dir = np.squeeze(ext_corners[:, boundary] - ext_corners[:, (boundary-1)%ext_corners.shape[1]])
+            out_wall_theta = np.arctan2(SRM_out_dir[1], SRM_out_dir[0]) # np.arccos(SRM_out_dir[1] / np.sqrt(SRM_out_dir[0]**2 + SRM_out_dir[1]**2))
+            SRM_nodes_out = np.array([np.linspace(ext_corners[0][boundary], ext_corners[0][boundary] + SRM_thickness*np.cos(out_wall_theta), SRM_n_layers),
+                                      np.linspace(ext_corners[1][boundary], ext_corners[1][boundary] + SRM_thickness*np.sin(out_wall_theta), SRM_n_layers)])
+            # Incoming wall direction
+            SRM_in_dir = np.squeeze(ext_corners[:, (boundary+2)%ext_corners.shape[1]] - ext_corners[:, (boundary+1)%ext_corners.shape[1]])
+            in_wall_theta = np.arctan2(SRM_in_dir[1], SRM_in_dir[0]) # np.arccos(SRM_in_dir[1] / np.sqrt(SRM_in_dir[0]**2 + SRM_in_dir[1]**2))
+            SRM_nodes_in =  np.array([np.linspace(ext_corners[0][(boundary+1)%ext_corners.shape[1]], ext_corners[0][(boundary+1)%ext_corners.shape[1]] - SRM_thickness*np.cos(in_wall_theta), SRM_n_layers),
+                                      np.linspace(ext_corners[1][(boundary+1)%ext_corners.shape[1]], ext_corners[1][(boundary+1)%ext_corners.shape[1]] - SRM_thickness*np.sin(in_wall_theta), SRM_n_layers)])
+            
+            # Check incoming and outgoing for intersections
+            if is_intersection(SRM_nodes_out[:, 0], SRM_nodes_out[:, -1], SRM_nodes_in[:, 0], SRM_nodes_in[:, -1]):
+                raise ValueError("Intersection encountered when generating SRM. Make angle between adjacent walls smaller, or move adjacent walls further away from one another.")
+            
             SRM_nodes = np.append(SRM_nodes_out, np.flip(SRM_nodes_in, axis=1), axis=1)
             
             N_SRM += int(SRM_nodes.shape[1]/2)-1

@@ -113,7 +113,11 @@ def getSpectrum(u, r, rmag, phi, time0, time1, spec_window, input_duration=1e-6,
     time_S = time1[np.where(np.abs(idp) == 
     							np.max(np.abs(idp)))[0][0]] - input_duration/2
     
-    return time_L, time_S, fdr, fdp
+    # Get the peak of the signal at the time of arrival
+    absL = np.max(np.abs(idr))
+    absS = np.max(np.abs(idp))
+    
+    return time_L, time_S, fdr, fdp, absL, absS
 
 def line_dir(theta, lamL, lamS, c44=70e9/(2*(1+0.34)), isLong=True):
     """
@@ -209,54 +213,66 @@ c44 = modulus / (2. * (1. + poisson))
 
 #%% Read input file to get coordinate locations.
 
-measNodeIdxs = []
-measNodeCoords = np.zeros((0, 3))
-with open(inpname, 'r') as f:
-    # Start by getting the nodes associated with MeasureSet
-    isMeasureSet = False
-    for line in f:
-        # If we're at the start of MeasureSet
-        if '*Nset, nset=MeasureSet' in line:
-            isMeasureSet = True
-            continue
-        # If we're at the end of MeasureSet
-        if isMeasureSet and ('elset=' in line or 'nset=' in line):
-            isMeasureSet = False
-            break
-        # If we're in the MeasureSet
-        if isMeasureSet:
-            line = line.split(',')
-            measNodeIdxs.append(int(line[0]))
-
-measNodeIdxs = np.unique(measNodeIdxs)
-# measNodeIdxs = np.delete(measNodeIdxs, range(1, 8000))
-
-with open(inpname, 'r') as f:
-    # Now we have all of the nodes associated with MeasureSet, get their coordinates
-    isNodeCoords = False
-    for line in f:
-        # If we're at the start of the node coordinates
-        if '*Node' in line:
-            isNodeCoords = True
-            continue
-        # If we're at te end of the node coordinates
-        if measNodeCoords.shape[0] == len(measNodeIdxs):
-            isNodeCoords = False
-            break
-        # If we're in the node coordinates
-        if isNodeCoords:
-            line = line.split(',')
-            if int(line[0]) in measNodeIdxs:
-                coords = np.reshape([int(line[0]), float(line[1]), float(line[2])], (1,3))
-                measNodeCoords = np.append(measNodeCoords, coords, axis=0)
+if ".odb" in odb_name:
+    odb = openOdb(odb_name, readOnly=True)
+        
+    numMeasNodes = len(odb.rootAssembly.instances['PART-1-1'].nodeSets['MEASURESET'].nodes)
+    measNodeIdxs = np.zeros((numMeasNodes), dtype=int)
+    measNodeCoords1 = np.zeros((numMeasNodes, 3), dtype=float)
+    for node in range(numMeasNodes):
+        measNodeIdxs[node] = int(odb.rootAssembly.instances['PART-1-1'].nodeSets['MEASURESET'].nodes[node].label)
+        measNodeCoords1[node] = odb.rootAssembly.instances['PART-1-1'].nodeSets['MEASURESET'].nodes[node].coordinates
+        
+    measNodeCoords = np.array([measNodeCoords1[:,0], measNodeCoords1[:,1]]).T
+else:
+    measNodeIdxs = []
+    measNodeCoords = np.zeros((0, 2))
+    with open(inpname, 'r') as f:
+        # Start by getting the nodes associated with MeasureSet
+        isMeasureSet = False
+        for line in f:
+            # If we're at the start of MeasureSet
+            if '*Nset, nset=MeasureSet' in line:
+                isMeasureSet = True
+                continue
+            # If we're at the end of MeasureSet
+            if isMeasureSet and ('elset=' in line or 'nset=' in line):
+                isMeasureSet = False
+                break
+            # If we're in the MeasureSet
+            if isMeasureSet:
+                line = line.split(',')
+                measNodeIdxs.append(int(line[0]))
+        
+    measNodeIdxs = np.unique(measNodeIdxs)
+    # measNodeIdxs = np.delete(measNodeIdxs, range(1, 8000))
+        
+    with open(inpname, 'r') as f:
+        # Now we have all of the nodes associated with MeasureSet, get their coordinates
+        isNodeCoords = False
+        for line in f:
+            # If we're at the start of the node coordinates
+            if '*Node' in line:
+                isNodeCoords = True
+                continue
+            # If we're at te end of the node coordinates
+            if measNodeCoords.shape[0] == len(measNodeIdxs):
+                isNodeCoords = False
+                break
+            # If we're in the node coordinates
+            if isNodeCoords:
+                line = line.split(',')
+                if int(line[0]) in measNodeIdxs:
+                    coords = np.reshape([float(line[1]), float(line[2])], (1,2))
+                    measNodeCoords = np.append(measNodeCoords, coords, axis=0)
 
 # Radial distances
-r = np.transpose(measNodeCoords[:, 1:])
+r = np.transpose(measNodeCoords)
 rmag = np.zeros(r.shape[1])
 for ii in range(r.shape[1]):
     rmag[ii] = np.linalg.norm(r[:, ii])
 
-minR = np.where(rmag == min(rmag))[0][0]
+minR = np.where(rmag == min(rmag[rmag!=0.0]))[0][0]
 
 
 
@@ -300,22 +316,14 @@ if ".odb" not in odb_name:
     amplitude = np.zeros((timevec.shape[0], 2))
     amplitude[:, 0] = timevec
     amplitude[:, 1] = input_signal
-    
-    if measNodeIdxs[0] == 1:
-        ignoreNode0 = True
-    else:
-        ignoreNode0 = False
-
 else:
-    odb = openOdb(odb_name, readOnly=True)
-    
     region = odb.steps['Step-1'].historyRegions
     keys = region.keys()
     
     # Get the input signal.
     if 'CF2' in region[keys[0]].historyOutputs.keys():
         amplitude = np.array(region[keys[0]].historyOutputs['CF2'].data)
-        ignoreNode0 = True
+        ignoreNode1 = True
         
     else:
         readAmplitude = np.zeros((0, 2))
@@ -351,7 +359,7 @@ else:
 
 
 #%% Compute input spectrum and get working parameters.
-        
+
 time0 = np.array(amplitude[:, 0])
 time_pts = amplitude.shape[0]
 time_step = time0[1] - time0[0]
@@ -388,27 +396,17 @@ time1 = np.linspace(time0[0], time0[-1], idu.shape[0])
 # we have fewer nodes nearer to the origin. Using the first node (which has close
 # to maximum r) will mean that there will be a larger number of nodes with significant
 # error.
-if ignoreNode0:
-    k1 = minR+1
-else:
-    k1 = minR
-
-nodeIdx = measNodeIdxs[minR]
 if ".odb" in odb_name:
-    try:
-        assert int(keys[k1].split('.')[1]) == nodeIdx 
-    except AssertionError:
-        print("Input file node {} does not match odb file node {}".format(keys[k1].split('.')[1], nodeIdx))
-        raise ValueError
-    u1 = np.array(region[keys[k1]].historyOutputs['U1'].data)
-    u2 = np.array(region[keys[k1]].historyOutputs['U2'].data)
+    u1 = np.array(region[keys[minR]].historyOutputs['U1'].data)
+    u2 = np.array(region[keys[minR]].historyOutputs['U2'].data)
 else:
-    u1 = np.array([All_Tts[0, :, k1], All_Tts[1, :, k1]]).T
-    u2 = np.array([All_Tts[0, :, k1], All_Tts[2, :, k1]]).T
+    raise NotImplementedError("Check that minR is valid here, based on whether node 1 is included earlier on.")
+    u1 = np.array([All_Tts[0, :, minR], All_Tts[1, :, minR]]).T
+    u2 = np.array([All_Tts[0, :, minR], All_Tts[2, :, minR]]).T
 
 u = np.array([u1[:, 1], u2[:, 1]])
 phi = np.arcsin(r[0, minR] / rmag[minR])
-ref_tL, ref_tS, _, _ = getSpectrum(u, r[:,minR], rmag[minR], phi, time0, time1, spec_window, input_duration=input_duration, interp_factor=interp_factor)
+ref_tL, ref_tS, _, _, _, _ = getSpectrum(u, r[:,minR], rmag[minR], phi, time0, time1, spec_window, input_duration=input_duration, interp_factor=interp_factor)
 refR = rmag[minR]
 
 
@@ -417,61 +415,56 @@ refR = rmag[minR]
 
 dir_L = np.zeros(measNodeIdxs.shape[0], dtype=np.complex128)
 dir_S = np.zeros(measNodeIdxs.shape[0], dtype=np.complex128)
-	
+
 t1 = time.time()
 print("Time to loop start: {}".format(secsToString(t1 - t0)))
 
 with open(filename, 'w') as f:
-    f.write('rmag, phi, C dL, C dS, vL, vS, dL_a - dL_m, dS_a - dS_m')
+    f.write('rmag, phi, C dL, C dS, vL, vS, max L, max S')
     f.write('{}\n'.format(np.array_str(freq[idx1:idx2], precision=1, max_line_width=20*(idx2-idx1))))
     for kk in range(measNodeIdxs.shape[0]):
+
+        # Get the node location. Use this to refer to anything involving MeasureSet, i.e. r and rmag
+        nodeIdx = int(keys[kk].split('.')[1])
+        node = np.where(measNodeIdxs == nodeIdx)[0][0]
         
         ################################# REMOVE INDENTATIONS WITHIN HERE ##################################
-        if ignoreNode0:
-            k1 = kk+1
-        else:
-            k1 = kk
-        
-        nodeIdx = measNodeIdxs[kk]
-        
+        if 'U1' not in region[keys[kk]].historyOutputs.keys() or 'U2' not in region[keys[kk]].historyOutputs.keys() or abs(rmag[node]) < 5e-16:
+            continue
+
         # Displacements
         if ".odb" in odb_name:
-            try:
-                assert int(keys[k1].split('.')[1]) == nodeIdx 
-            except AssertionError:
-                print("Input file node {} does not match odb file node {}".format(keys[kk].split('.')[1], nodeIdx))
-                raise ValueError
-            u1 = np.array(region[keys[k1]].historyOutputs['U1'].data)
-            u2 = np.array(region[keys[k1]].historyOutputs['U2'].data)
+            u1 = np.array(region[keys[kk]].historyOutputs['U1'].data)
+            u2 = np.array(region[keys[kk]].historyOutputs['U2'].data)
         else:
             u1 = np.array([All_Tts[0, :, kk], All_Tts[1, :, kk]]).T
             u2 = np.array([All_Tts[0, :, kk], All_Tts[2, :, kk]]).T
+
         u = np.array([u1[:, 1], u2[:, 1]])
-		
-        # Get the node location
-        node = np.where(measNodeCoords[:, 0] == nodeIdx)[0][0]
-        
+
+
         # Angle
         phi = np.arcsin(r[0, node] / rmag[node])
-        
-        if abs(phi) > .41 and abs(phi) < .45:
-            if rmag[node] > 40e-3:
-                a = 1
-            elif rmag[node] < 10e-3:
-                a = 1
-        
+
+        # if abs(phi) > .41 and abs(phi) < .45:
+            # if rmag[node] > 40e-3:
+                # a = 1
+            # elif rmag[node] < 10e-3:
+                # a = 1
+
         # Spectrum
-        time_L, time_S, fdr, fdp = getSpectrum(u, r[:,kk], rmag[kk], phi, time0, time1, spec_window, input_duration=input_duration, interp_factor=interp_factor)
-        
+        time_L, time_S, fdr, fdp, absL, absS = getSpectrum(u, r[:,node], rmag[node], phi, time0, time1, spec_window, input_duration=input_duration, interp_factor=interp_factor)
+
         # Measured wave velocity
         try:
             meas_vL = (rmag[node] - refR) / (time_L - ref_tL)
             meas_vS = (rmag[node] - refR) / (time_S - ref_tS)
         except (FloatingPointError, ZeroDivisionError):
             meas_vL, meas_vS = 0, 0
+
         if np.isnan(meas_vL) or np.isnan(meas_vS):
             meas_vL, meas_vS = 0, 0
-        
+
         # Undo wave propagation. Set to zero any values where the input spectrum
         # is close to zero (this is kills everything outside of approximate range
         # 2 MHz < f < 8 MHz).
@@ -481,27 +474,28 @@ with open(filename, 'w') as f:
         for ii in range(idx1, idx2):
             inv_exp_prop_L[0, ii] = np.exp(+2.0j * np.pi * freq[ii] * time_L)
             inv_exp_prop_S[0, ii] = np.exp(+2.0j * np.pi * freq[ii] * time_S)
+
         inv_exp_prop_L = np.reshape(inv_exp_prop_L[0, idx1:idx2], (1, idx2-idx1))
         inv_exp_prop_S = np.reshape(inv_exp_prop_S[0, idx1:idx2], (1, idx2-idx1))
-        
+
         # # Phase difference between propagation term e(iwt) and product of I^{-1} O
         # working_spec = np.dot(inv_in_freq_spec, fdr[idx1:idx2]) * np.sqrt(np.reshape(freq[idx1:idx2], (idx2-idx1, 1)))
         # working_phase = np.squeeze(np.angle(working_spec))
         # exp_phase = np.squeeze(np.angle(inv_exp_prop_L[0, :]))
-    
+
         # phasediff = np.mod(exp_phase + working_phase + np.pi, 2*np.pi) - np.pi
         # phasediffstr = np.array_str(phasediff, precision=8, max_line_width=20*(idx2-idx1))
         # meanphasediff = nanmean(phasediff)
-        
+
         # We have that (out_spec = in_spec * e(-iwt) * amps) and (amps = B * D * T)
         # T = 1 as we are in contact and are only looking at direct paths.
         # => D = e(iwt) * in_spec^{-1} * out_spec / B
         # where q = 3/4 for L; q = 5/4 for S.
         try:
-            dir_L[kk] = np.dot(inv_exp_prop_L, np.dot(inv_in_freq_spec, fdr[idx1:idx2]) * np.sqrt(rmag[node]))[0][0]
-            dir_S[kk] = np.dot(inv_exp_prop_S, np.dot(inv_in_freq_spec, fdp[idx1:idx2]) * np.sqrt(rmag[node]))[0][0]
+            dir_L[node] = np.dot(inv_exp_prop_L, np.dot(inv_in_freq_spec, fdr[idx1:idx2]) * np.sqrt(rmag[node]))[0][0]
+            dir_S[node] = np.dot(inv_exp_prop_S, np.dot(inv_in_freq_spec, fdp[idx1:idx2]) * np.sqrt(rmag[node]))[0][0]
         except (FloatingPointError, ZeroDivisionError):
-            dir_L[kk], dir_S[kk] = 0, 0
+            dir_L[node], dir_S[node] = 0, 0
         ####################################################################################################
         
         try:
@@ -510,7 +504,7 @@ with open(filename, 'w') as f:
             dL, dS = np.nan, np.nan
         
         # Write output
-        f.write('{}, {}, {}, {}, {}, {}, {}, {}\n'.format(rmag[node], phi, dir_L[kk], dir_S[kk], meas_vL, meas_vS, dir_L[kk]-dL, dir_S[kk]-dS))#, phasediffstr))
+        f.write('{}, {}, {}, {}, {}, {}, {}, {}\n'.format(rmag[node], phi, dir_L[node], dir_S[node], meas_vL, meas_vS, absL, absS))#, phasediffstr))
         
         # Update progress bar based on platform.
         if "linux" in sys.platform and (kk+1)%(int(len(measNodeIdxs)/10)+1) == 0:

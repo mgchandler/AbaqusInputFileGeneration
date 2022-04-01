@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-"""
-Generates input files (.inp) for Abaqus based on a config file (.yml). To call
-from the command line, run "python AbaqusInputGeneration.py <config file>" or
-"python AbaqusInputGeneration.py <config file>.yml"
+# """
+# Generates input files (.inp) for Abaqus based on a config file (.yml). To call
+# from the command line, run "python AbaqusInputGeneration.py <config file>" or
+# "python AbaqusInputGeneration.py <config file>.yml"
 
-Adapted on Tue Jun 18 17:28:19 2021
+# Adapted on Tue Jun 18 17:28:19 2021
 
-@author: mc16535
+# @author: mc16535
 
-Original script created on Wed Jan 20 09:34:36 2016
+# Original script created on Wed Jan 20 09:34:36 2016
 
-#@author: ab9621
-"""
+# #@author: ab9621
+# """
 
 # import matplotlib.pyplot as plt
 import numpy as np
@@ -781,6 +781,9 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
         
     else:
         amplitude = make_amp(amplitude)
+    # Make sure zero force applied for rest of simulation.
+    amplitude[-1, 1] = 0
+    
     for el in range(num_els):
         
         # When corner is rounded, we're probably doing a diffraction study. As
@@ -1055,7 +1058,7 @@ if __name__ == '__main__':
             yaml_name = sys.argv[1]
     # Assume that the script is being run on Windows in an IDE console.
     else:
-        yaml_name = 'D_scat.yml'
+        yaml_name = 'D_rdm2.yml'
         
     # Open and read .yml
     settings = read_settings(yaml_name)

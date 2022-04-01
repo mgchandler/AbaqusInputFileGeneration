@@ -96,7 +96,7 @@ def F_0(z2, mu2):
 
 #%% Import data
 
-interpN = 100
+interpN = 500
 
 if len(sys.argv) > 1:
     filename = sys.argv[1]

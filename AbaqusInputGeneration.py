@@ -13,7 +13,7 @@
 # #@author: ab9621
 # """
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import numpy as np
 from numpy.random import default_rng
 import os
@@ -480,14 +480,6 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
     else:
         filename = '{}.poly'.format(job_name_template)
         write_polyfile(filename, ext_corners, N_holes, SRM_internal_nodes, N_SRM, hole_nodes, N_probe_coords, boundaries, SRM_n_layers, hole_locs)            
-                    
-    # # Plot the geometry to make sure it looks as expected.
-    # for ii in range(node_segments.shape[1]):
-    #     if node_segments[0][ii] != 0 and node_segments[0][ii] != 0:
-    #         plt.plot([all_the_nodes[0][int(node_segments[0][ii])-1], all_the_nodes[0][int(node_segments[1][ii])-1]], 
-    #                  [all_the_nodes[1][int(node_segments[0][ii])-1], all_the_nodes[1][int(node_segments[1][ii])-1]],
-    #                  color='r', linewidth=0.1)
-    # plt.show()
     
     density = settings['material']['density']
     modulus = settings['material']['modulus']
@@ -1024,6 +1016,14 @@ def write_polyfile(filename, ext_corners, N_holes, SRM_internal_nodes, N_SRM, ho
                 f.write('{}   {} {}\n'.format(hole+1, hole_locs[0, hole], hole_locs[1, hole]))
         else:
             f.write('0\n')
+                        
+    # # Plot the geometry to make sure it looks as expected.
+    # for ii in range(node_segments.shape[1]):
+    #     if node_segments[0][ii] != 0 and node_segments[0][ii] != 0:
+    #         plt.plot([all_the_nodes[0][int(node_segments[0][ii])-1], all_the_nodes[0][int(node_segments[1][ii])-1]], 
+    #                   [all_the_nodes[1][int(node_segments[0][ii])-1], all_the_nodes[1][int(node_segments[1][ii])-1]],
+    #                   color='r', linewidth=0.1)
+    # plt.show()
 
 
 
@@ -1038,7 +1038,7 @@ if __name__ == '__main__':
             yaml_name = sys.argv[1]
     # Assume that the script is being run on Windows in an IDE console.
     else:
-        yaml_name = 'D_rdm2.yml'
+        yaml_name = 'Wedge15.yml'
         
     # Open and read .yml
     settings = read_settings(yaml_name)

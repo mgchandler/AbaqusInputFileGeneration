@@ -87,26 +87,6 @@ def read_settings(filename):
         settings = yaml.safe_load(f)
     return settings
 
-def node_locs(nodes):
-    # Converts the locations of nodes passed as strings into floats
-    return (np.array([a.split() for a in nodes[1:-2]])).astype(float)
-    
-def find_nodes_in_x_width(nodes, target, width):
-    # Find and return the node indices located within some horizontal width of
-    # the target coordinates. This function is built on the assumption that the
-    # transducer is oriented horizontally (parallel to x-axis), i.e. on a flat
-    # top surface of a sample.
-    
-    nodes = node_locs(nodes)
-    locs = [] # Initialise empty array: total # nodes in transducer unknown.
-    x_min = target[0] - width/2.
-    x_max = target[0] + width/2.
-    for a in nodes:
-        if a[2] == target[1]:
-            if x_min <= a[1] <= x_max:
-                locs.append(int(a[0]))
-    return locs 
-
 def checkIfLeft(linePoint1, linePoint2, checkPoint):
     return ((linePoint2[0] - linePoint1[0])*(checkPoint[1] - linePoint1[1]) - (linePoint2[1] - linePoint1[1])*(checkPoint[0] - linePoint1[0])) > -3e-16
 

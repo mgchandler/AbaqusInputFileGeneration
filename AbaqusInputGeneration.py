@@ -395,16 +395,20 @@ def generate_input(settings):
             #                           np.linspace(ext_corners[1][boundary+1], ext_corners[1][boundary+1] - SRM_thickness*np.sin(wall_theta), SRM_n_layers)])
             # # SRM_nodes = np.append(SRM_nodes_out, np.flip(SRM_nodes_in, axis=1), axis=1)
             
+            # SRM wall direction
+            SRM_dir = np.squeeze(ext_corners[:, (boundary+1)%ext_corners.shape[1]] - ext_corners[:, boundary])
+            SRM_wall_theta = np.arctan2(SRM_dir[1], SRM_dir[0])
+            
             # Outgoing wall direction
             SRM_out_dir = np.squeeze(ext_corners[:, boundary] - ext_corners[:, (boundary-1)%ext_corners.shape[1]])
             out_wall_theta = np.arctan2(SRM_out_dir[1], SRM_out_dir[0]) # np.arccos(SRM_out_dir[1] / np.sqrt(SRM_out_dir[0]**2 + SRM_out_dir[1]**2))
-            SRM_nodes_out = np.array([np.linspace(ext_corners[0][boundary], ext_corners[0][boundary] + SRM_thickness*np.cos(out_wall_theta), SRM_n_layers),
-                                      np.linspace(ext_corners[1][boundary], ext_corners[1][boundary] + SRM_thickness*np.sin(out_wall_theta), SRM_n_layers)])
+            SRM_nodes_out = np.array([np.linspace(ext_corners[0][boundary], ext_corners[0][boundary] + SRM_thickness*np.cos(out_wall_theta)/np.sin(out_wall_theta - SRM_wall_theta), SRM_n_layers),
+                                      np.linspace(ext_corners[1][boundary], ext_corners[1][boundary] + SRM_thickness*np.sin(out_wall_theta)/np.sin(out_wall_theta - SRM_wall_theta), SRM_n_layers)])
             # Incoming wall direction
             SRM_in_dir = np.squeeze(ext_corners[:, (boundary+2)%ext_corners.shape[1]] - ext_corners[:, (boundary+1)%ext_corners.shape[1]])
             in_wall_theta = np.arctan2(SRM_in_dir[1], SRM_in_dir[0]) # np.arccos(SRM_in_dir[1] / np.sqrt(SRM_in_dir[0]**2 + SRM_in_dir[1]**2))
-            SRM_nodes_in =  np.array([np.linspace(ext_corners[0][(boundary+1)%ext_corners.shape[1]], ext_corners[0][(boundary+1)%ext_corners.shape[1]] - SRM_thickness*np.cos(in_wall_theta), SRM_n_layers),
-                                      np.linspace(ext_corners[1][(boundary+1)%ext_corners.shape[1]], ext_corners[1][(boundary+1)%ext_corners.shape[1]] - SRM_thickness*np.sin(in_wall_theta), SRM_n_layers)])
+            SRM_nodes_in =  np.array([np.linspace(ext_corners[0][(boundary+1)%ext_corners.shape[1]], ext_corners[0][(boundary+1)%ext_corners.shape[1]] - SRM_thickness*np.cos(in_wall_theta)/np.sin(SRM_wall_theta - in_wall_theta), SRM_n_layers),
+                                      np.linspace(ext_corners[1][(boundary+1)%ext_corners.shape[1]], ext_corners[1][(boundary+1)%ext_corners.shape[1]] - SRM_thickness*np.sin(in_wall_theta)/np.sin(SRM_wall_theta - in_wall_theta), SRM_n_layers)])
             
             # Check incoming and outgoing for intersections
             if is_intersection(SRM_nodes_out[:, 0], SRM_nodes_out[:, -1], SRM_nodes_in[:, 0], SRM_nodes_in[:, -1]):
@@ -675,7 +679,8 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
                 
                 for node in range(3):
                     # Nodes are recorded by Triangle from index 1, python refers from index 0.
-                    # Contents of element_block are recorded in Triangle notation.
+                    # Contents of element_block are recorded in Triangle notation: subtract 1
+                    # to get position in node_block.
                     node_pos = node_block[:, int(element_block[node, element])-1]
                 
                     # Want this to be <= 0 if SRM is in -ve x-direction. Use machine
@@ -727,7 +732,8 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
                     SRM_nodes_in = np.flip(ext_corners[:, boundary+SRM_n_layers:boundary+2*SRM_n_layers], axis=1)
                     for node in range(3):
                         # Nodes are recorded by Triangle from index 1, python refers from index 0.
-                        # Contents of element_block are recorded in Triangle notation.
+                        # Contents of element_block are recorded in Triangle notation: subtract 1
+                        # to get position in node_block.
                         node_pos = node_block[:, int(element_block[node, element])-1]
                     
                         # Want this to be <= 0 if SRM is in -ve x-direction. Use machine
@@ -743,6 +749,11 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
                         
                 # If all nodes are in the SRM, check which sublayer the element is part of
                 if SRM_ticker == 3:
+                    # Remove node from MeasureSet
+                    if meas == "rand":
+                        for node in element_block[:, element].astype(int):
+                            if node in measSet:
+                                measSet = measSet[measSet != node]
                     for boundary in boundaries:
                         SRM_nodes_out = ext_corners[:, boundary:boundary+SRM_n_layers]
                         SRM_nodes_in = np.flip(ext_corners[:, boundary+SRM_n_layers:boundary+2*SRM_n_layers], axis=1)
@@ -765,7 +776,7 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
                             break
                         # Else, continue with the next iteration.
                 elif SRM_ticker > 3:
-                    print("Node {} in too many SRMs - this message should never be printed to console.".format(int(line[0])))
+                    raise ValueError("Node {} in too many SRM layers.".format(int(line[0])))
                 # If at least one node is not in the SRM, then the element is not in
                 # the SRM. Store it in elsewhere.
                 else:
@@ -861,27 +872,52 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
             # Create node sets corresponding to each element in the array
             for element in range(num_els):
                 i.write('*Nset, nset=El{}\n'.format(element+1))
+                set_counter = 0
                 for a in range(num_nodes_on_tx):
-                    i.write('{},\n '.format(element*num_nodes_on_tx + a + 1))
+                    i.write('{}, '.format(element*num_nodes_on_tx + a + 1))
+                    if set_counter == 15:
+                        i.write('\n')
+                        set_counter = -1
+                    set_counter += 1
+                i.write('\n')
                     
             # upToMeas = ext_corners.shape[1]
             # for layer in SRM_internal_nodes:
                 # upToMeas += layer.shape[1]
             if meas != "":
                 i.write('*Nset, nset=MeasureSet\n')
+                set_counter = 0
                 for a in measSet:
-                    i.write('{},\n '.format(a))
+                    i.write('{}, '.format(a))
+                    if set_counter == 15:
+                        i.write('\n')
+                        set_counter = -1
+                    set_counter += 1
+                i.write('\n')
                 
             # Create element set for everything but the SRM, and each SRM
             # sublayer.
             i.write('*Elset, elset=All_but_SRM\n')
+            set_counter = 0
             for a in All_but_SRM_els:
-                i.write('{},\n'.format(a))
+                i.write('{}, '.format(a))
+                if set_counter == 15:
+                    i.write('\n')
+                    set_counter = -1
+                set_counter += 1
+            i.write('\n')
+                
             for sublayer in range(1, SRM_n_layers):
                 i.write('*Elset, elset=SRM{}\n'.format(sublayer))
+                set_counter = 0
                 for a in SRM_elements[sublayer-1]:
                     if a != 0:
-                        i.write('{}, \n'.format(a))
+                        i.write('{}, '.format(a))
+                        if set_counter == 15:
+                            i.write('\n')
+                            set_counter = -1
+                        set_counter += 1
+                i.write('\n')
             
             # Write the section definitions, matching regions of the mesh with
             # material definitions.
@@ -937,8 +973,11 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
                     if 'set' in thisoutput.keys():
                     
                         if 't_int' in thisoutput.keys():
-                            outpFreq = int(float(thisoutput['t_int']) / time_step)
-                            i.write('*Output, {}, frequency={}\n'.format(thisoutput['type'], outpFreq))
+                            if thisoutput['type'] == "history":
+                                outpFreq = int(float(thisoutput['t_int']) / time_step)
+                                i.write('*Output, {}, frequency={}\n'.format(thisoutput['type'], outpFreq))
+                            elif thisoutput['type'] == "field":
+                                i.write('*Output, {}, time interval={}\n'.format(thisoutput['type'], thisoutput['t_int']))
                         elif 'freq' in thisoutput.keys():
                             i.write('*Output, {}, frequency={}\n'.format(thisoutput['type'], thisoutput['freq']))
                         
@@ -1098,7 +1137,7 @@ if __name__ == '__main__':
             yaml_name = sys.argv[1]
     # Assume that the script is being run on Windows in an IDE console.
     else:
-        yaml_name = 'Wedge15.yml'
+        yaml_name = 'Wedge0.yml'
         
     # Open and read .yml
     settings = read_settings(yaml_name)

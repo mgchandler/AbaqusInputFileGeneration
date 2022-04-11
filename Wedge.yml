@@ -43,7 +43,7 @@ probe:
   amplitude: 5MHz_pulse.csv
   
   # <double> OPTIONAL Total time which the job will be run for.
-  # time_len = 1.5e-5
+  time_len: 1.67e-5
 
 
 
@@ -159,7 +159,7 @@ output:
     #                  Records history for all probes contained within these values (inlusive).
     # sets: 1, 32
     
- - A:
+ - U:
     # <str> REQUIRED "field" or "history".
     type: history
     
@@ -183,10 +183,10 @@ output:
     t_int: 5e-9
     
     # <str> OPTIONAL Which sets to use for recording outputs.
-    set: 1
+    set: rand
  
  - U:
     type: field
     output: Node
-    t_int: 1e-8
+    t_int: 5e-8
     set: All_nodes

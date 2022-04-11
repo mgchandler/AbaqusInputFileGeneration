@@ -78,46 +78,32 @@ def updateProgress(startTime, currentItn, totalItn):
 
 
 #%% Compute time of arrival and frequency spectra from input signal
-def getSpectrum(u, r, rmag, phi, time0, time1, spec_window, input_duration=1e-6, v_L=6317.012224890781, v_S=3110.2818131859126, interp_factor=8):
+def getSpectrum(u, r, rmag, phi, time0, time1, spec_window, input_duration=1e-6, v=6317.012224890781, interp_factor=8, idx1=0, idx2=-1):
     # Get expected time of arrival of longitudinal and shear components
-    long_sample_time = rmag / v_L + input_duration/2
-    shear_sample_time = rmag / v_S + input_duration/2
+    sample_time = rmag / v + input_duration/2
 		
     # Time-domain window to isolate signal of interest
-    l_window = np.ones((u.shape[1], 1))
-    l_window[time0 < long_sample_time - 1.05*input_duration/2] = 0
-    l_window[time0 > long_sample_time + 1.05*input_duration/2] = 0
-    s_window = np.ones((u.shape[1], 1))
-    s_window[time0 < shear_sample_time - 1.05*input_duration/2] = 0
-    s_window[time0 > shear_sample_time + 1.05*input_duration/2] = 0
-    
+    window = np.ones((u.shape[1], 1))
+    window[time0 < sample_time - 1.05*input_duration/2] = 0
+    window[time0 > sample_time + 1.05*input_duration/2] = 0
+        
     # Radial and azimuthal displacement
-    r_perp = np.dot(np.array([[0, -1], [1, 0]]), r)
-    dr = np.reshape(np.dot(u.T, r)/rmag, (u.shape[1], 1)) * l_window
-    dp = np.reshape(np.dot(u.T, r_perp)/rmag, (u.shape[1], 1)) * s_window
-    
+    du = np.reshape(np.dot(u.T, r)/rmag, (u.shape[1], 1)) * window
+        
     # Spectra
-    fdr = np.fft.rfft(dr, axis=0)
-    fdp = np.fft.rfft(dp, axis=0)
-    fdr = fdr[:int(dr.shape[0] / 2)] * spec_window
-    fdp = fdp[:int(dp.shape[0] / 2)] * spec_window
-    
+    fdu = np.zeros((du.shape[0], 1), dtype=complex)
+    fdu[:int(u.shape[0]/2)+1] = 2 * np.fft.rfft(du, axis=0)
+    fdu *= spec_window
+        
     # Fourier interpolate to get higher resolution time of propagation
-    idr = np.fft.ifft(np.append(interp_factor * fdr, np.zeros((fdr.shape[0]*(interp_factor-1), fdr.shape[1]))), axis=0)
-    idp = np.fft.ifft(np.append(interp_factor * fdp, np.zeros((fdp.shape[0]*(interp_factor-1), fdp.shape[1]))), axis=0)
+    idu = np.fft.ifft(np.append(interp_factor * fdu, np.zeros((fdu.shape[0]*(interp_factor-1), fdu.shape[1]))), axis=0)
 		
     # Get the time of the maximum in the vicinity of the expected time of arrival, to compute actual
     # wave speed.
-    time_L = time1[np.where(np.abs(idr) == 
-     							np.max(np.abs(idr)))[0][0]] - input_duration/2
-    time_S = time1[np.where(np.abs(idp) == 
-    							np.max(np.abs(idp)))[0][0]] - input_duration/2
-    
-    # Get the peak of the signal at the time of arrival
-    absL = np.max(np.abs(idr))
-    absS = np.max(np.abs(idp))
-    
-    return time_L, time_S, fdr, fdp, absL, absS
+    time_of_arrival = time1[np.where(np.abs(idu) == 
+     							np.max(np.abs(idu)))[0][0]] - input_duration/2
+        
+    return time_of_arrival, fdu[idx1:idx2]
 
 def line_dir(theta, lamL, lamS, c44=70e9/(2*(1+0.34)), isLong=True):
     """
@@ -150,9 +136,9 @@ def line_dir(theta, lamL, lamS, c44=70e9/(2*(1+0.34)), isLong=True):
     cosT = np.cos(theta)
     
     if isLong:
-        directivity = np.exp(3.0j/4.0 * np.pi) * np.sqrt(2/np.pi) / c44 * cosT * (mu2 - 2 * sinT2) / F_0(sinT2, mu2)
+        directivity = np.exp(3.0j/4.0 * np.pi) * np.sqrt(2/np.pi) * cosT * (mu2 - 2 * sinT2) / F_0(sinT2, mu2)
     else:
-        directivity = np.exp(5.0j/4.0 * np.pi) * np.sqrt(2/np.pi) / c44 * mu2**(5/4) * np.sin(2*theta) * np.sqrt(mu2 * sinT2 - 1, dtype=np.complex128) / F_0(mu2*sinT2, mu2)
+        directivity = np.exp(5.0j/4.0 * np.pi) * np.sqrt(2/np.pi) * mu2**(5/4) * np.sin(2*theta) * np.sqrt(mu2 * sinT2 - 1, dtype=np.complex128) / F_0(mu2*sinT2, mu2)
         
     return directivity
 
@@ -366,19 +352,23 @@ time_step = time0[1] - time0[0]
 
 fft_pts = time_pts
 fstep = 1.0/(time0[-1])
-freq = ((np.array(range(int(fft_pts/2)))) * fstep)
+freq = ((np.array(range(fft_pts))) * fstep)
 sig_window = np.ones((time0.shape[0], 1))
 sig_window[time0 > input_duration] = 0
 spec_window = np.ones((freq.shape[0], 1))
 spec_window[freq > 2*centre_freq] = 0
 
 in_time_sig = np.reshape(amplitude[:, 1], (amplitude.shape[0], 1)) * sig_window
-in_freq_spec = np.fft.fft(in_time_sig, axis=0)
-in_freq_spec = in_freq_spec[:int(in_time_sig.shape[0] / 2)] * spec_window
+in_freq_spec = np.zeros((in_time_sig.shape[0], 1), dtype=complex)
+in_freq_spec[:int(in_time_sig.shape[0]/2 + 1)] = 2 * np.fft.rfft(in_time_sig, axis=0)
+in_freq_spec *= spec_window
 
 # Find out where the spectrum is non-zero for computing directivities later.
 nonZeros = np.where((np.abs(in_freq_spec) > max(np.abs(in_freq_spec))/100))[0]
 idx1, idx2 = nonZeros[0], nonZeros[-1]
+for ii in range(idx1, idx2):
+    if ii not in nonZeros:
+        print("Warning: non zero region of input spectrum between {:.3e}Hz and {:.3e}Hz is not contiguous".format(freq[idx1], freq[idx2]))
 
 inv_in_freq_spec = np.diag(1.0/np.squeeze(in_freq_spec[idx1:idx2]))
 
@@ -420,40 +410,34 @@ t1 = time.time()
 print("Time to loop start: {}".format(secsToString(t1 - t0)))
 
 with open(filename, 'w') as f:
-    f.write('rmag, phi, C dL, C dS, vL, vS, max L, max S')
-    f.write('{}\n'.format(np.array_str(freq[idx1:idx2], precision=1, max_line_width=20*(idx2-idx1))))
+    f.write('rmag, phi, C dL, C dS, vL, vS\n')
+    # f.write('{}\n'.format(np.array_str(freq[idx1:idx2], precision=1, max_line_width=20*(idx2-idx1))))
     for kk in range(measNodeIdxs.shape[0]):
 
         # Get the node location. Use this to refer to anything involving MeasureSet, i.e. r and rmag
         nodeIdx = int(keys[kk].split('.')[1])
         node = np.where(measNodeIdxs == nodeIdx)[0][0]
-        
+
         ################################# REMOVE INDENTATIONS WITHIN HERE ##################################
         if 'U1' not in region[keys[kk]].historyOutputs.keys() or 'U2' not in region[keys[kk]].historyOutputs.keys() or abs(rmag[node]) < 5e-16:
             continue
 
         # Displacements
+        u = np.zeros((2, time_pts))
         if ".odb" in odb_name:
-            u1 = np.array(region[keys[kk]].historyOutputs['U1'].data)
-            u2 = np.array(region[keys[kk]].historyOutputs['U2'].data)
+            u[0, :] = np.asarray(region[keys[kk]].historyOutputs['U1'].data)[:, 1]
+            u[1, :] = np.asarray(region[keys[kk]].historyOutputs['U2'].data)[:, 1]
         else:
-            u1 = np.array([All_Tts[0, :, kk], All_Tts[1, :, kk]]).T
-            u2 = np.array([All_Tts[0, :, kk], All_Tts[2, :, kk]]).T
-
-        u = np.array([u1[:, 1], u2[:, 1]])
-
+            u[0, :] = np.asarray([All_Tts[0, :, kk], All_Tts[1, :, kk]])
+            u[1, :] = np.asarray([All_Tts[0, :, kk], All_Tts[2, :, kk]])
 
         # Angle
         phi = np.arcsin(r[0, node] / rmag[node])
 
-        # if abs(phi) > .41 and abs(phi) < .45:
-            # if rmag[node] > 40e-3:
-                # a = 1
-            # elif rmag[node] < 10e-3:
-                # a = 1
-
         # Spectrum
-        time_L, time_S, fdr, fdp, absL, absS = getSpectrum(u, r[:,node], rmag[node], phi, time0, time1, spec_window, input_duration=input_duration, interp_factor=interp_factor)
+        r_perp = np.dot(np.array([[0, -1], [1, 0]]), r)
+        time_L, fdr = getSpectrum(u, r[:,node], rmag[node], phi, time0, time1, spec_window, input_duration=input_duration, v=6317.0122248907810, interp_factor=interp_factor, idx1=idx1, idx2=idx2)
+        time_S, fdp = getSpectrum(u, r_perp,    rmag[node], phi, time0, time1, spec_window, input_duration=input_duration, v=3110.2818131859126, interp_factor=interp_factor, idx1=idx1, idx2=idx2)
 
         # Measured wave velocity
         try:
@@ -469,14 +453,12 @@ with open(filename, 'w') as f:
         # is close to zero (this is kills everything outside of approximate range
         # 2 MHz < f < 8 MHz).
         # Set to zero any values where the input spectrum is close to zero.
-        inv_exp_prop_L = np.zeros((1, int(time_pts/2)), dtype=np.complex128)
-        inv_exp_prop_S = np.zeros((1, int(time_pts/2)), dtype=np.complex128)
-        for ii in range(idx1, idx2):
-            inv_exp_prop_L[0, ii] = np.exp(+2.0j * np.pi * freq[ii] * time_L)
-            inv_exp_prop_S[0, ii] = np.exp(+2.0j * np.pi * freq[ii] * time_S)
-
-        inv_exp_prop_L = np.reshape(inv_exp_prop_L[0, idx1:idx2], (1, idx2-idx1))
-        inv_exp_prop_S = np.reshape(inv_exp_prop_S[0, idx1:idx2], (1, idx2-idx1))
+        omega_t_L = 2.0 * np.pi * freq * time_L
+        omega_t_S = 2.0 * np.pi * freq * time_S
+        inv_exp_prop_L = np.zeros((1, idx2-idx1), dtype=np.complex128)
+        inv_exp_prop_S = np.zeros((1, idx2-idx1), dtype=np.complex128)
+        inv_exp_prop_L[0] = np.exp(omega_t_L[idx1:idx2] * 1.0j)
+        inv_exp_prop_S[0] = np.exp(omega_t_S[idx1:idx2] * 1.0j)
 
         # # Phase difference between propagation term e(iwt) and product of I^{-1} O
         # working_spec = np.dot(inv_in_freq_spec, fdr[idx1:idx2]) * np.sqrt(np.reshape(freq[idx1:idx2], (idx2-idx1, 1)))
@@ -490,10 +472,9 @@ with open(filename, 'w') as f:
         # We have that (out_spec = in_spec * e(-iwt) * amps) and (amps = B * D * T)
         # T = 1 as we are in contact and are only looking at direct paths.
         # => D = e(iwt) * in_spec^{-1} * out_spec / B
-        # where q = 3/4 for L; q = 5/4 for S.
         try:
-            dir_L[node] = np.dot(inv_exp_prop_L, np.dot(inv_in_freq_spec, fdr[idx1:idx2]) * np.sqrt(rmag[node]))[0][0]
-            dir_S[node] = np.dot(inv_exp_prop_S, np.dot(inv_in_freq_spec, fdp[idx1:idx2]) * np.sqrt(rmag[node]))[0][0]
+            dir_L[node] = np.dot(inv_exp_prop_L, np.dot(inv_in_freq_spec, fdr) * np.sqrt(rmag[node]))[0][0] * np.sqrt(2) * c44# * np.sqrt(omega_t_L[idx1:idx2]))[0][0] * c44
+            dir_S[node] = np.dot(inv_exp_prop_S, np.dot(inv_in_freq_spec, fdp) * np.sqrt(rmag[node]))[0][0] * np.sqrt(2) * c44# * np.sqrt(omega_t_S[idx1:idx2]))[0][0] * c44
         except (FloatingPointError, ZeroDivisionError):
             dir_L[node], dir_S[node] = 0, 0
         ####################################################################################################
@@ -504,13 +485,14 @@ with open(filename, 'w') as f:
             dL, dS = np.nan, np.nan
         
         # Write output
-        f.write('{}, {}, {}, {}, {}, {}, {}, {}\n'.format(rmag[node], phi, dir_L[node], dir_S[node], meas_vL, meas_vS, absL, absS))#, phasediffstr))
+        f.write('{}, {}, {}, {}, {}, {}, {}, {}\n'.format(rmag[node], phi, dir_L[node], dir_S[node], meas_vL, meas_vS))#, phasediffstr))
         
         # Update progress bar based on platform.
         if "linux" in sys.platform and (kk+1)%(int(len(measNodeIdxs)/10)+1) == 0:
             updateProgress(t1, kk+1, len(measNodeIdxs))
         elif "win" in sys.platform and (kk+1)%(int(len(measNodeIdxs)/100)+1) == 0:
             updateProgress(t1, kk+1, len(measNodeIdxs))
+        
     print('')
 
 t2 = time.time()

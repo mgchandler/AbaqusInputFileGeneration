@@ -92,7 +92,7 @@ def getSpectrum(u, r, rmag, phi, time0, time1, spec_window, input_duration=1e-6,
         
     # Spectra
     fdu = np.zeros((du.shape[0], 1), dtype=complex)
-    fdu[:int(u.shape[0]/2)+1] = 2 * np.fft.rfft(du, axis=0)
+    fdu[:int(u.shape[1]/2)+1] = 2 * np.fft.rfft(du, axis=0)
     fdu *= spec_window
         
     # Fourier interpolate to get higher resolution time of propagation
@@ -136,9 +136,9 @@ def line_dir(theta, lamL, lamS, c44=70e9/(2*(1+0.34)), isLong=True):
     cosT = np.cos(theta)
     
     if isLong:
-        directivity = np.exp(3.0j/4.0 * np.pi) * np.sqrt(2/np.pi) * cosT * (mu2 - 2 * sinT2) / F_0(sinT2, mu2)
+        directivity = np.exp(3.0j/4.0 * np.pi) * cosT * (mu2 - 2 * sinT2) / F_0(sinT2, mu2)
     else:
-        directivity = np.exp(5.0j/4.0 * np.pi) * np.sqrt(2/np.pi) * mu2**(5/4) * np.sin(2*theta) * np.sqrt(mu2 * sinT2 - 1, dtype=np.complex128) / F_0(mu2*sinT2, mu2)
+        directivity = np.exp(5.0j/4.0 * np.pi) * mu2**(5/4) * np.sin(2*theta) * np.sqrt(mu2 * sinT2 - 1, dtype=np.complex128) / F_0(mu2*sinT2, mu2)
         
     return directivity
 
@@ -152,7 +152,7 @@ def F_0(z2, mu2):
 try:
     assert len(sys.argv) == 2
     odb_name = sys.argv[1]
-    filename = odb_name[:-3]+'dir.dat'
+    filename = odb_name[:-3]+'dir_k.dat'
     isCommand = True
     from odbAccess import openOdb
     if "linux" in sys.platform:
@@ -193,6 +193,7 @@ input_duration = no_cycles / centre_freq
 density = settings['material']['density']
 modulus = settings['material']['modulus']
 poisson = settings['material']['poisson']
+c11 = modulus * (1. - poisson) / ((1. + poisson) * (1. - 2. * poisson))
 c44 = modulus / (2. * (1. + poisson))
 
 
@@ -396,7 +397,9 @@ else:
 
 u = np.array([u1[:, 1], u2[:, 1]])
 phi = np.arcsin(r[0, minR] / rmag[minR])
-ref_tL, ref_tS, _, _, _, _ = getSpectrum(u, r[:,minR], rmag[minR], phi, time0, time1, spec_window, input_duration=input_duration, interp_factor=interp_factor)
+r_perp = np.dot(np.array([[0, -1], [1, 0]]), r[:,minR])
+ref_tL, _ = getSpectrum(u, r[:,minR], rmag[minR], phi, time0, time1, spec_window, input_duration=input_duration, v=6317.0122248907810, interp_factor=interp_factor)
+ref_tS, _ = getSpectrum(u, r_perp,    rmag[minR], phi, time0, time1, spec_window, input_duration=input_duration, v=3110.2818131859126, interp_factor=interp_factor)
 refR = rmag[minR]
 
 
@@ -416,6 +419,8 @@ with open(filename, 'w') as f:
 
         # Get the node location. Use this to refer to anything involving MeasureSet, i.e. r and rmag
         nodeIdx = int(keys[kk].split('.')[1])
+        if nodeIdx not in measNodeIdxs:
+            continue
         node = np.where(measNodeIdxs == nodeIdx)[0][0]
 
         ################################# REMOVE INDENTATIONS WITHIN HERE ##################################
@@ -435,7 +440,7 @@ with open(filename, 'w') as f:
         phi = np.arcsin(r[0, node] / rmag[node])
 
         # Spectrum
-        r_perp = np.dot(np.array([[0, -1], [1, 0]]), r)
+        r_perp = np.dot(np.array([[0, -1], [1, 0]]), r[:,node])
         time_L, fdr = getSpectrum(u, r[:,node], rmag[node], phi, time0, time1, spec_window, input_duration=input_duration, v=6317.0122248907810, interp_factor=interp_factor, idx1=idx1, idx2=idx2)
         time_S, fdp = getSpectrum(u, r_perp,    rmag[node], phi, time0, time1, spec_window, input_duration=input_duration, v=3110.2818131859126, interp_factor=interp_factor, idx1=idx1, idx2=idx2)
 
@@ -473,8 +478,10 @@ with open(filename, 'w') as f:
         # T = 1 as we are in contact and are only looking at direct paths.
         # => D = e(iwt) * in_spec^{-1} * out_spec / B
         try:
-            dir_L[node] = np.dot(inv_exp_prop_L, np.dot(inv_in_freq_spec, fdr) * np.sqrt(rmag[node]))[0][0] * np.sqrt(2) * c44# * np.sqrt(omega_t_L[idx1:idx2]))[0][0] * c44
-            dir_S[node] = np.dot(inv_exp_prop_S, np.dot(inv_in_freq_spec, fdp) * np.sqrt(rmag[node]))[0][0] * np.sqrt(2) * c44# * np.sqrt(omega_t_S[idx1:idx2]))[0][0] * c44
+            dir_L[node] = np.dot(inv_exp_prop_L, np.dot(inv_in_freq_spec, fdr) * np.sqrt(rmag[node]))[0][0] * c44 / np.sqrt(np.pi)# * np.sqrt(omega_t_L[idx1:idx2]))[0][0] * c11
+            dir_S[node] = np.dot(inv_exp_prop_S, np.dot(inv_in_freq_spec, fdp) * np.sqrt(rmag[node]))[0][0] * c44 / np.sqrt(np.pi)# * np.sqrt(omega_t_S[idx1:idx2]))[0][0] * c44
+            # dir_L[node] = np.dot(inv_exp_prop_L, np.dot(inv_in_freq_spec, fdr) * np.sqrt(omega_t_L[idx1:idx2]))[0][0] * c11
+            # dir_S[node] = np.dot(inv_exp_prop_S, np.dot(inv_in_freq_spec, fdp) * np.sqrt(omega_t_S[idx1:idx2]))[0][0] * c44
         except (FloatingPointError, ZeroDivisionError):
             dir_L[node], dir_S[node] = 0, 0
         ####################################################################################################
@@ -485,7 +492,7 @@ with open(filename, 'w') as f:
             dL, dS = np.nan, np.nan
         
         # Write output
-        f.write('{}, {}, {}, {}, {}, {}, {}, {}\n'.format(rmag[node], phi, dir_L[node], dir_S[node], meas_vL, meas_vS))#, phasediffstr))
+        f.write('{}, {}, {}, {}, {}, {}\n'.format(rmag[node], phi, dir_L[node], dir_S[node], meas_vL, meas_vS))#, phasediffstr))
         
         # Update progress bar based on platform.
         if "linux" in sys.platform and (kk+1)%(int(len(measNodeIdxs)/10)+1) == 0:

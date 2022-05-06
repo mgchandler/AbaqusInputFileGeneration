@@ -1,6 +1,6 @@
 job:
   # <str> REQUIRED Name used for file generation. Should contain no spaces or special characters.
-  name: Wedge15
+  name: D_rdm_el_45npw
 
 
 
@@ -28,7 +28,7 @@ probe:
   cycles: 5
   
   # <double> REQUIRED Element width. Set to 0.0 if a point source is required.
-  width: 0.0e-3
+  width: 0.53e-3
   
   # <double> OPTIONAL Separation between elements. Unused if one element is used. Pitch =
   # Separation + Width.
@@ -43,7 +43,7 @@ probe:
   amplitude: 5MHz_pulse.csv
   
   # <double> OPTIONAL Total time which the job will be run for.
-  time_len: 2.00e-5
+  time_len: 1.5e-5
 
 
 
@@ -59,7 +59,7 @@ mesh:
   #                diameter colinear with x-axis. Half-space generated for -ve y.
   # - "poly" : Polygonal solid. Specify corners using coordinates in "geom" field. Note that no
   #            checks are made to ensure the geometry is valid.
-  profile: poly
+  profile: halfcirc
   
   # Geometry. Assumes coordinates are listed contiguously starting at the top right, moving
   # clockwise. Do not repeat the first coordinate to complete the segments. Note that the first 
@@ -67,16 +67,12 @@ mesh:
   geom:
     # <double list> REQUIRED List of x-coordinates used to generate geometry.
     x: 
-     - 11.0e-3
-     - 11.12672937e-3 # 15sin15 + 7.5cos15
-     - -3.362158021e-3 # 15sin15 - 7.5cos15
-     - -6.0e-3
+     - 45.0e-3
+     - -45.0e-3
      
     # <double list> REQUIRED List of y-coordinates used to generate geometry.
     z: 
      - 0.0
-     - -12.54774456e-3 # 15cos15 - 7.5sin15
-     - -16.443003023e-3 # 15cos15 + 7.5sin15
      - 0.0
      
     # <int list> OPTIONAL List of walls which will be used to generate SRM layers. 0th wall 
@@ -88,7 +84,6 @@ mesh:
     # the shorter, resulting in the same results as an n-shaped geometry).
     SRM:
      - 0
-     - 2
      
   # OPTIONAL Filleted corner. Currently only one supported.
   # fillet:
@@ -107,22 +102,19 @@ mesh:
     
     # # <double list> REQUIRED List of x-coordinates of SDHs.
     # x: 
-     # - 0.0e-3
-    # #  - 3.8823e-3
+     # - 16.25e-3
      
     # # <double list> REQUIRED List of y-coordinates of SDHs.
     # z: 
-     # - -15.0e-3
-    # #  - -14.4889e-3
+     # - -17.5e-3
      
     # # <double list> sdh REQUIRED List of radii for SDHs.
     # r: 
      # - 0.2e-3
-    # #  - 0.2e-3
      
     # # <bool> OPTIONAL Whether to generate a mesh without a defect, but with nodes in the same place.
     # # If not included, assume that no blank is required; take default value False.
-    # doBlank: True
+    # doBlank: False
      
      
 
@@ -170,23 +162,4 @@ output:
     t_int: 1e-8
     
     # <str> OPTIONAL Which sets to use for recording outputs.
-    set: 1
-    
- - U:
-    # <str> REQUIRED "field" or "history".
-    type: history
-    
-    # <str> REQUIRED "Node" or "Element"
-    output: Node
-    
-    # <double> OPTIONAL Time step with which to capture data.
-    t_int: 1e-8
-    
-    # <str> OPTIONAL Which sets to use for recording outputs.
     set: rand
- 
- - U:
-    type: field
-    output: Node
-    t_int: 5e-7
-    set: All_nodes

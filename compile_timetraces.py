@@ -60,6 +60,7 @@ with open(filename, 'r') as f:
             time_counter += 1
 
 num_els = np.unique(el_labels).shape[0]
+nodes_per_el = int(num_nodes / num_els)
 
 # Loop through a second time to get the actual data. One loop would require appending; two enables pre-defining array size.
 # For larger files, this is much more efficient; for smaller files, appending would probably be quicker but the actual runtime difference would be negligible.
@@ -75,7 +76,7 @@ with open(filename, 'r') as f:
             continue
         # Integrate all nodes across the length of the array. Note that nodes within the array are assumed to have equal spacing.
         elif line != '\n':
-            timetraces[1, time_counter, el_labels[node_counter]-1] += np.double(line.split(' ')[1])
+            timetraces[1, time_counter, el_labels[node_counter]-1] += np.double(line.split(' ')[1]) / nodes_per_el
             time_counter += 1
         else:
             continue

@@ -1140,7 +1140,7 @@ if __name__ == '__main__':
             yaml_name = sys.argv[1]
     # Assume that the script is being run on Windows in an IDE console.
     else:
-        yaml_name = 'D_scat_el_45npw.yml'
+        yaml_name = 'L_45npw.yml'
         
     # Open and read .yml
     settings = read_settings(yaml_name)

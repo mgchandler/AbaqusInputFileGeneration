@@ -49,7 +49,7 @@ probe:
 
 mesh:
   # <int> REQUIRED Number of nodes which will be generated per wavelength. Should be >10.
-  n_per_wl: 45
+  n_per_wl: 20
   
   # <str> REQUIRED Code for which element type to use. Plain strain triangular: CPE3
   el_type: CPE3

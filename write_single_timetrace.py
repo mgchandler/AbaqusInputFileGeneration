@@ -10,6 +10,7 @@
 from __future__ import print_function # For progress bar
 import numpy as np
 from odbAccess import openOdb
+from operator import attrgetter, itemgetter
 import sys
 import time
 
@@ -57,18 +58,19 @@ def updateProgress(startTime, currentItn, totalItn):
 
 
 
-output_fields = ['U1', 'U2', 'CF2']
+allowed_fields = ['U1', 'U2', 'CF2']
 
 assert len(sys.argv) > 1
-if len(sys.argv) == 3:
-	output_field = sys.argv[2]
-	if output_field not in output_fields:
-		raise ValueError("Invalid output field {}: choose from {}".format(output_field, ", ".join(output_fields)))
+if len(sys.argv) >= 3:
+    output_fields = sys.argv[2:]
+    for output_field in output_fields:
+        if output_field not in allowed_fields:
+            raise ValueError("Invalid output field {}: choose from {}".format(output_field, ", ".join(allowed_fields)))
 else:
-	output_field = 'U2'
+	output_fields = ['U2']
 
 odb_name = sys.argv[1]
-filename = odb_name[:-4]+'_'+output_field+'.dat'
+filename = odb_name[:-4]+'_'+'_'.join(output_fields)+'.dat'
 
 odb = openOdb(odb_name, readOnly=True)
 
@@ -93,30 +95,48 @@ if "MEASURESET" in sets.keys():
 
 t1 = time.time()
 with open(filename, 'w') as f:
-	for kk in range(len(keys)):
-		if output_field in region[keys[kk]].historyOutputs.keys():
-			data = region[keys[kk]].historyOutputs[output_field].data
-			filename = region[keys[kk]].name + '.dat'
-			
-			# Write timetraces
-			node_idx = filename.split('.')[1]
-			if int(node_idx) in nodes_in_el:
-				el_idx = np.where(nodes_in_el == int(node_idx))[0][0] + 1
-				f.write('Node-'+node_idx+' El{}\n'.format(el_idx))
-				
-				for line in range(len(data)):
-					f.write('{} {}\n'.format(data[line][0], data[line][1]))
-				
-				f.write('\n')
-			elif doMeasureSet:
-				if int(node_idx) in nodes_in_measureset:
-					set_idx = np.where(nodes_in_measureset == int(node_idx))[0][0]
-					f.write('{}.Node-'.format(kk+1)+node_idx+' MeasureSet coords=({:.8f},{:.8f},{:.8f})\n'.format(sets["MEASURESET"].nodes[set_idx].coordinates[0], sets["MEASURESET"].nodes[set_idx].coordinates[1], sets["MEASURESET"].nodes[set_idx].coordinates[2]))
-					
-					for line in range(len(data)):
-						f.write('{} {}\n'.format(data[line][0], data[line][1]))
-					
-					f.write('\n')
-		
-		if (kk+1)%int(len(keys)/10) == 0:
-			updateProgress(t1, kk, len(keys))
+    for kk in range(len(keys)):
+        # Get only history outputs of interest. Skip this node if they aren't all available.
+        try:
+            data = itemgetter(*output_fields)(region[keys[kk]].historyOutputs)
+        except KeyError:
+            continue
+        
+        # When only one output requested, itemgetter returns the item only, and a tuple otherwise.
+        # Ensure that we always have a tuple.
+        if not isinstance(data, tuple):
+            data = (data,)
+        
+        # Get the history data only.
+        data = list(map(attrgetter("data"), data))
+        
+        # Write timetraces
+        node_idx = region[keys[kk]].name.split('.')[1]
+        # If we have node sets of transducer elements.
+        if int(node_idx) in nodes_in_el:
+            el_idx = np.where(nodes_in_el == int(node_idx))[0][0] + 1
+            f.write('Node-'+node_idx+' El{}\n'.format(el_idx))
+            
+            for line in range(len(data[0])):
+                field_vals = []
+                for output_field in range(len(data)):
+                    field_vals.append(data[output_field][line][1])
+                f.write('{} {}\n'.format(data[0][line][0], ' '.join(field_vals)))
+                
+            f.write('\n')
+        # If we have a MeasureSet.
+        elif doMeasureSet:
+            if int(node_idx) in nodes_in_measureset:
+                set_idx = np.where(nodes_in_measureset == int(node_idx))[0][0]
+                f.write('{}.Node-'.format(kk+1)+node_idx+' MeasureSet coords=({:.8f},{:.8f},{:.8f})\n'.format(sets["MEASURESET"].nodes[set_idx].coordinates[0], sets["MEASURESET"].nodes[set_idx].coordinates[1], sets["MEASURESET"].nodes[set_idx].coordinates[2]))
+                
+                for line in range(len(data[0])):
+                    field_vals = []
+                    for output_field in range(len(data)):
+                        field_vals.append('{}'.format(data[output_field][line][1]))
+                    f.write('{} {}\n'.format(data[0][line][0], ' '.join(field_vals)))
+                    
+                f.write('\n')
+        
+        if (kk+1)%int(len(keys)/10) == 0:
+            updateProgress(t1, kk, len(keys))

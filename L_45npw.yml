@@ -40,7 +40,7 @@ probe:
   
   # <str> OPTIONAL Filename for file containing input signal. Used in favour of generating the
   # signal every time. Required if "cycles" is not included.
-  amplitude: 5MHz_pulse.csv
+  # amplitude: 5MHz_pulse.csv
   
   # <double> OPTIONAL Total time which the job will be run for.
   # time_len: 1.5e-5

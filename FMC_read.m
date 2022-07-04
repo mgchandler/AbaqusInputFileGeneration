@@ -5,7 +5,13 @@ disp(name)
 
 cd(path)
 
-num_els = 32;
+% Get number of elements. Assume that filenames look like "txII-rxJJ.dat".
+list = dir('tx*rx*.dat');
+num_els_sq = length(list);
+num_els = sqrt(num_els_sq);
+assert(num_els == round(num_els), "FMC_read: incorrect number of files in directory.")
+
+num_els = 64;
 
 el = 0;
 

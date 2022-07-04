@@ -27,7 +27,8 @@ import yaml
 
 #%% Amplitude function
 
-def make_amp(freq=5.0e+6, no_cycles=5, time_pts=51, time_step=2.0e-8):
+def make_amp(freq=5.0e+6, no_cycles=5, time_step=2.0e-8):
+    time_pts = int(no_cycles/(freq*time_step)+1)
     t = np.array(range(time_pts)) * time_step
     tmax = max(t)
     tmid = tmax/2
@@ -823,7 +824,7 @@ def write_inputfile(settings, job_name_template, ext_corners, N_probe_coords, ma
         amplitude[:,1] = np.real(np.fft.ifft(newAmp))
         
     else:
-        amplitude = make_amp(amplitude)
+        amplitude = make_amp(freq=settings['probe']['freq'], no_cycles=settings['probe']['cycles'])
     # Make sure zero force applied for rest of simulation.
     amplitude[-1, 1] = 0
     

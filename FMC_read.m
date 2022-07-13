@@ -1,4 +1,4 @@
-function FMC_read(path, name)
+function FMC_read(path, name, varargin)
 
 disp(path)
 disp(name)
@@ -11,8 +11,6 @@ num_els_sq = length(list);
 num_els = sqrt(num_els_sq);
 assert(num_els == round(num_els), "FMC_read: incorrect number of files in directory.")
 
-num_els = 64;
-
 el = 0;
 
 disp('Beginning data capture')
@@ -22,7 +20,11 @@ for tx = 1:num_els
         el = el+1;
         % Grab data
         fname = sprintf('tx%d-rx%d.dat', tx, rx);
-        [t, d] = textread(fname, '%f %f');
+        fID = fopen(fname);
+        C = textscan(fID, '%f %f');
+        t = C{1};
+        d = C{2};
+        fclose(fID);
         
         % Initialise arrays now that we know how big they are
         if and(tx == 1, rx == 1)
@@ -38,8 +40,20 @@ for tx = 1:num_els
     fprintf('tx = %d complete\n', tx)
 end
 
+p = inputParser;
+p.CaseSensitive = false;
+addParameter(p, "freq", 5e6, @(x)validateattributes(x,{'numeric'},...
+            {'nonempty','positive'}));
+addParameter(p, "cycles", 5, @(x)validateattributes(x,{'numeric'},...
+            {'nonempty','integer','nonnegative'}));
+parse(p, varargin{:})
+
+freq = p.Results.freq;
+cycles = p.Results.cycles;
+
+
 % Remove duplicate 0 term at start, and time shift
-time = time(2:end, :) - 5.0e-7;
+time = time(2:end, :) - .5*cycles/freq;
 data = data(2:end, :);
 
 % fft and ifft to get envelope and abs data.

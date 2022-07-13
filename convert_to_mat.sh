@@ -9,7 +9,7 @@
 JobName="${SLURM_JOB_NAME}_1"
 
 # Load modules
-module load apps/matlab/r2019a
+module load apps/matlab/r2021a
 module load apps/abaqus/2018
 module load lang/python/anaconda/3.8-2020.07
 

@@ -14,6 +14,8 @@ MaxNoJobs=$MaxArrayNo*$JobsPerArray # This should equal the total number of elem
 # Make sure that MaxNoJobs / MaxArrayNo is an integer.
 JobName=${SLURM_JOB_NAME}
 
+Memory=$(($SLURM_MEM_PER_NODE - 500))
+
 # Global parameters based on variables
 ThisArrayNo=${SLURM_ARRAY_TASK_ID}
 
@@ -56,7 +58,7 @@ for Job in $(seq 1 $JobsPerArray); do
 	# Define command as executable so that we only write the function once.
 	# Do this so we can debug by writing the cmd to the output file
 	echo Starting Abaqus execution.
-	EXE1="abaqus job=${ThisRunName} input=${ThisRunName}.inp mem=16000MB scratch=. interactive"
+	EXE1="abaqus job=${ThisRunName} input=${ThisRunName}.inp mem=${Memory}MB scratch=. interactive"
 	echo ${EXE1}
 	${EXE1}
 	echo Abaqus completed analysis.
